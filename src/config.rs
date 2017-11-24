@@ -58,7 +58,7 @@ impl Config {
         let mut population: Population = Vec::with_capacity(self.population_size as usize);
 
         for i in 0..self.population_size {
-            population.push(Genome::new(i, &self.genome_config));
+            population.push(Genome::new(i, &mut self.genome_config));
         }
 
         for _ in 0..100000 {
