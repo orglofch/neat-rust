@@ -17,9 +17,6 @@ pub(crate) struct InnovationArchive {
     /// The next `NodeGene` innovation id generated between all `Genomes` globally.
     next_node_innovation_id: u32,
 
-    /// The next `ConnectionGene` innovation id generated between all `Genomes` globally.
-    next_connection_innovation_id: u32,
-
     /// The input `NodeGene` ids, preserving order.
     ///
     /// Note, the order itself doesn't define the id since input nodes can be added or
@@ -39,13 +36,6 @@ pub(crate) struct InnovationArchive {
     /// so we maintain a list of each split and the ordering of already existing
     /// splits in the genomes determines which id we return when recording innovations.
     hidden_node_ids_by_origin: HashMap<(u32, u32), Vec<u32>>,
-
-    /// The `ConnectionGene` ids mapped by their origin (a pair `(in_id, out_id)`) representing
-    /// the nodes which the `ConnectionGene` connects.
-    ///
-    /// `NodeGenes` can only be connected once since the `ConnectionGene` is never deleted,
-    /// only disabled.
-    connection_ids_by_origin: HashMap<(u32, u32), u32>,
 }
 
 // TODO(orglofch): Make this thread safe so we can parallelize mutations.
@@ -53,11 +43,9 @@ impl InnovationArchive {
     pub(crate) fn new() -> InnovationArchive {
         InnovationArchive {
             next_node_innovation_id: 0,
-            next_connection_innovation_id: 0,
             input_node_ids: Vec::new(),
             output_node_ids: Vec::new(),
             hidden_node_ids_by_origin: HashMap::new(),
-            connection_ids_by_origin: HashMap::new(),
         }
     }
 
@@ -159,32 +147,6 @@ impl InnovationArchive {
             }
         }
     }
-
-    /// Record a `ConnectionGene` innovation.
-    ///
-    /// # Arguments
-    ///
-    /// * `in_id` - The `in_id` of the new `ConnectionGene`.
-    ///
-    /// * `out_id` - THe `out_id` of the new `ConnectionGene`.
-    ///
-    /// # Returns
-    ///
-    /// The id of the innovation if it already exists in the archive, or a new id.
-    pub(crate) fn record_connection_innovation(&mut self, in_id: u32, out_id: u32) -> u32 {
-        match self.connection_ids_by_origin.get(&(in_id, out_id)) {
-            Some(&id) => id,
-            None => {
-                let new_id = self.next_connection_innovation_id;
-                self.connection_ids_by_origin.insert(
-                    (in_id, out_id),
-                    new_id,
-                );
-                self.next_connection_innovation_id += 1;
-                new_id
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -210,9 +172,6 @@ mod test {
         // It won't use the same id as a hidden node.
         archive.record_hidden_node_innovation(1, 1, 0);
         assert_eq!(archive.record_spontaneous_input_node(3), 5);
-
-        // Connection ids are untouched.
-        assert_eq!(archive.record_connection_innovation(1, 1), 0);
     }
 
     #[test]
@@ -234,9 +193,6 @@ mod test {
         // It won't use the same id as a hidden node.
         archive.record_hidden_node_innovation(1, 1, 0);
         assert_eq!(archive.record_spontaneous_output_node(3), 5);
-
-        // Connection ids are untouched.
-        assert_eq!(archive.record_connection_innovation(1, 1), 0);
     }
 
     #[test]
@@ -256,27 +212,5 @@ mod test {
 
         // An entirely new node creates a new innovation.
         assert_eq!(archive.record_hidden_node_innovation(3, 4, 0), 3);
-
-        // Connection ids are untouched.
-        assert_eq!(archive.record_connection_innovation(1, 1), 0);
-    }
-
-    #[test]
-    pub fn test_record_connection() {
-        let mut archive = InnovationArchive::new();
-
-        assert_eq!(archive.record_connection_innovation(1, 2), 0);
-
-        // Same connection creates the same innovation.
-        assert_eq!(archive.record_connection_innovation(1, 2), 0);
-
-        // Reverse of an existing connection creates a new innovation.
-        assert_eq!(archive.record_connection_innovation(2, 1), 1);
-
-        // An entirely new connection creates a new innovation.
-        assert_eq!(archive.record_connection_innovation(3, 4), 2);
-
-        // Node ids are untouched.
-        assert_eq!(archive.record_hidden_node_innovation(1, 1, 0), 0);
     }
 }

@@ -19,7 +19,6 @@ use speciation::SpeciationConfig;
 /// If `sum < 1` there wil be a chance of no mutation being taken.
 /// If `sum > 1` the probability for a single mutation will be relative to the total.
 pub struct GenomeConfig {
-    // TODO(orglofch): Consider using tuples as keys instead of maintaing a mapping.
     innovation_archive: InnovationArchive,
 
     // TODO(orglofch): Allow inputs and outputs to be named, making the addition or removal
@@ -236,10 +235,6 @@ impl Genome {
         if config.start_connected {
             for &in_id in input_ids_by_name.values() {
                 for &out_id in output_ids_by_name.values() {
-                    let id = config.innovation_archive.record_connection_innovation(
-                        in_id,
-                        out_id,
-                    );
                     connections_by_edge.insert((in_id, out_id), ConnectionGene::new(1.0));
                 }
             }
