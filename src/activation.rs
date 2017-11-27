@@ -4,9 +4,9 @@ pub enum ActivationFn {
 }
 
 impl ActivationFn {
-    pub(crate) fn eval(self, val: f32) -> f32 {
+    pub(crate) fn eval(&self, val: f32) -> f32 {
         match self {
-            ActivationFn::Sigmoid => sigmoid_activation(val),
+            &ActivationFn::Sigmoid => sigmoid_activation(val),
         }
     }
 }

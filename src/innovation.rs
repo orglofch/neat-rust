@@ -189,10 +189,11 @@ impl InnovationArchive {
 
 #[cfg(test)]
 mod test {
+    use super::*;
 
     #[test]
     pub fn test_record_spontaneous_input_node() {
-        let mut archive = super::InnovationArchive::new();
+        let mut archive = InnovationArchive::new();
 
         assert_eq!(archive.record_spontaneous_input_node(0), 0);
 
@@ -216,7 +217,7 @@ mod test {
 
     #[test]
     pub fn test_record_spontaneous_output_node() {
-        let mut archive = super::InnovationArchive::new();
+        let mut archive = InnovationArchive::new();
 
         assert_eq!(archive.record_spontaneous_output_node(0), 0);
 
@@ -240,7 +241,7 @@ mod test {
 
     #[test]
     pub fn test_record_hidden_node_innovation() {
-        let mut archive = super::InnovationArchive::new();
+        let mut archive = InnovationArchive::new();
 
         assert_eq!(archive.record_hidden_node_innovation(1, 2, 0), 0);
 
@@ -262,7 +263,7 @@ mod test {
 
     #[test]
     pub fn test_record_connection() {
-        let mut archive = super::InnovationArchive::new();
+        let mut archive = InnovationArchive::new();
 
         assert_eq!(archive.record_connection_innovation(1, 2), 0);
 
