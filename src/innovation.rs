@@ -113,12 +113,7 @@ impl InnovationArchive {
     /// # Returns
     ///
     /// The id of the innovation if it already exists in the archive, or a new id.
-    pub(crate) fn record_hidden_node_innovation(
-        &mut self,
-        in_id: u32,
-        out_id: u32,
-        split_count: u32,
-    ) -> u32 {
+    pub(crate) fn record_hidden_node_innovation(&mut self, in_id: u32, out_id: u32, split_count: u32) -> u32 {
         match self.hidden_node_ids_by_origin.entry((in_id, out_id)) {
             Entry::Occupied(o) => {
                 let mut value = o.into_mut();

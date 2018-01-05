@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use checkpoint::CheckpointConfig;
 use fitness::FitnessConfig;
 use genome::{Genome, GenomeConfig, Population};
@@ -21,7 +23,7 @@ pub struct Config {
     checkpoint_config: Option<CheckpointConfig>,
     fitness_config: FitnessConfig,
     genome_config: GenomeConfig,
-    speciation_config: Option<SpeciationConfig>,
+    speciation_config: SpeciationConfig,
 
     population_size: u32,
 }
@@ -32,7 +34,7 @@ impl Config {
             checkpoint_config: None,
             fitness_config: fitness_config,
             genome_config: genome_config,
-            speciation_config: None,
+            speciation_config: SpeciationConfig::new(),
             population_size: 1,
         }
     }
@@ -43,7 +45,7 @@ impl Config {
     }
 
     pub fn set_speciation_config(&mut self, config: SpeciationConfig) -> &mut Config {
-        self.speciation_config = Some(config);
+        self.speciation_config = config;
         self
     }
 
@@ -55,14 +57,53 @@ impl Config {
     // TODO(orglofch): Split the runner out from the config.
     pub fn run(&mut self) {
         // Initialize population.
-        let mut population: Population = Vec::with_capacity(self.population_size as usize);
+        let mut population: Population = HashMap::with_capacity(self.population_size as usize);
 
         for i in 0..self.population_size {
-            population.push(Genome::new(i, &mut self.genome_config));
+            population.insert(i as u32, Genome::new(&mut self.genome_config));
         }
 
         for _ in 0..100000 {
-            (self.fitness_config.fitness_fn)(&Vec::new());
+            let fitness_by_id = (self.fitness_config.fitness_fn)(&population);
+
+            // TODO(orglofch): We probavbly want a pool allocator for new genomes and connections.
+
+            // TODO(orglofch): Possible change the way this is layed out depending on
+            // the compatibility threshold.
+            let mut species_by_proto_id: HashMap<u32, Vec<u32>> = HashMap::new();
+
+            // Speciate the genomes into groups by some arbitrary protypical genomes.
+            for (id, ref genome) in population.iter() {
+                if species_by_proto_id.is_empty() {
+                    species_by_proto_id.insert(*id, vec![*id]);
+                } else {
+                    for entry in species_by_proto_id.iter_mut() {
+                        let proto_genome = population.get(&entry.0).unwrap();
+
+                        let distance = proto_genome.distance(&genome, &self.speciation_config);
+
+                        if distance <= self.speciation_config.compatibility_threshold {
+                            entry.1.push(*id);
+                        }
+                    }
+                }
+            }
+
+            // Calculate the weighted fitness of the population groups.
+            let mut species_fitness_by_proto_id: HashMap<u32, f32> = HashMap::new();
+            for entry in species_by_proto_id.iter() {
+                let fitness_sum: f32 = entry.1.iter()
+                    .map(|id| fitness_by_id.get(&id).unwrap())
+                    .sum();
+                species_fitness_by_proto_id.insert(*entry.0, fitness_sum / entry.1.len() as f32);
+            }
+
+            // Perform intra-species crossover based on fitness.
+
+            // Perform mutation.
+
+            // Update the population pool.
+            // TODO(orglofch): We probably want to try to reuse allocations here to speed it up.
         }
     }
 }

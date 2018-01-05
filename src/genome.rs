@@ -10,6 +10,7 @@ use std::collections::VecDeque;
 use activation::ActivationFn;
 use aggregation::AggregationFn;
 use innovation::InnovationArchive;
+use gene::{ConnectionGene, NodeGene};
 use speciation::SpeciationConfig;
 
 // TODO(orglofch): Consider separating initial and mutation configs.
@@ -114,73 +115,7 @@ impl GenomeConfig {
     }
 }
 
-#[derive(Clone)]
-pub struct NodeGene {
-    /// The function used in aggregating across synapses prior to calculating activation.
-    aggregation_fn: AggregationFn,
-
-    /// The function used inaga determining neuron activation.
-    activation_fn: ActivationFn,
-
-    /// The bias applied to the node.
-    ///
-    /// We store the bias in the `NodeGene` instead of via a `ConnectionGene` since
-    /// we don't want bias connection to be splittable and bias is generally fully connected
-    /// or disabled (via `bias = 0.0`).
-    bias: f32,
-}
-
-impl NodeGene {
-    fn new(aggregation_fn: AggregationFn, activation_fn: ActivationFn) -> NodeGene {
-        NodeGene {
-            aggregation_fn: aggregation_fn,
-            activation_fn: activation_fn,
-            bias: 0.0,
-        }
-    }
-
-    /// Calculates the compatibiltiy distance between this `NodeGene` and another.
-    fn distance(&self, other: &NodeGene, speciation_config: &SpeciationConfig) -> f32 {
-        return (self.bias - other.bias).abs() *
-            speciation_config.compatibility_weight_coefficient;
-    }
-}
-
-#[derive(Clone)]
-pub struct ConnectionGene {
-    /// Whether the connection is enabled.
-    ///
-    /// Connections can be disabled when being split by the creation of new nodes or through
-    /// mutation but are persisted in the genome as a means of maintaining ancestry.
-    enabled: bool,
-
-    /// The synaptic excitement applied to the input to produce the output.
-    weight: f32,
-
-    /// The number of times this connection has been split.
-    splits: u32,
-}
-
-impl ConnectionGene {
-    fn new(weight: f32) -> ConnectionGene {
-        ConnectionGene {
-            enabled: true,
-            weight: weight,
-            splits: 0,
-        }
-    }
-
-    /// Calculates the compatibility distance between this `ConnectionGene` and another.
-    fn distance(&self, other: &ConnectionGene, speciation_config: &SpeciationConfig) -> f32 {
-        // TODO(orglofch): Consider concept of disabled state.
-        return (self.weight - other.weight).abs() *
-            speciation_config.compatibility_weight_coefficient;
-    }
-}
-
 pub struct Genome {
-    id: u32,
-
     /// `NodeGene` ids by their named inputs.
     input_ids_by_name: HashMap<String, u32>,
 
@@ -200,16 +135,16 @@ pub struct Genome {
 }
 
 impl Genome {
-    pub(crate) fn new(id: u32, config: &mut GenomeConfig) -> Genome {
+    pub(crate) fn new(genome_config: &mut GenomeConfig) -> Genome {
         let mut input_ids_by_name: HashMap<String, u32> =
-            HashMap::with_capacity(config.inputs.len());
+            HashMap::with_capacity(genome_config.inputs.len());
         let mut output_ids_by_name: HashMap<String, u32> =
-            HashMap::with_capacity(config.outputs.len());
+            HashMap::with_capacity(genome_config.outputs.len());
         let mut output_nodes_by_id: HashMap<u32, NodeGene> =
-            HashMap::with_capacity(config.outputs.len());
+            HashMap::with_capacity(genome_config.outputs.len());
 
-        let num_connections = if config.start_connected {
-            config.inputs.len() * config.inputs.len()
+        let num_connections = if genome_config.start_connected {
+            genome_config.inputs.len() * genome_config.inputs.len()
         } else {
             0
         };
@@ -218,21 +153,25 @@ impl Genome {
             HashMap::with_capacity(num_connections);
 
         // Create input nodes.
-        for (i, name) in config.inputs.iter().enumerate() {
-            let id = config.innovation_archive.record_spontaneous_input_node(i as u32);
+        for (i, name) in genome_config.inputs.iter().enumerate() {
+            let id = genome_config
+                .innovation_archive
+                .record_spontaneous_input_node(i as u32);
             input_ids_by_name.insert(name.clone(), id);
         }
 
         // Create output nodes.
-        for (i, name) in config.outputs.iter().enumerate() {
-            let id = config.innovation_archive.record_spontaneous_output_node(i as u32);
+        for (i, name) in genome_config.outputs.iter().enumerate() {
+            let id = genome_config
+                .innovation_archive
+                .record_spontaneous_output_node(i as u32);
             output_ids_by_name.insert(name.clone(), id);
             output_nodes_by_id.insert(id, NodeGene::new(AggregationFn::Sum, ActivationFn::Sigmoid));
         }
 
         // If the inputs and outputs start connected then create the initial ConnectionGenes
         // which connect each input to each output.
-        if config.start_connected {
+        if genome_config.start_connected {
             for &in_id in input_ids_by_name.values() {
                 for &out_id in output_ids_by_name.values() {
                     connections_by_edge.insert((in_id, out_id), ConnectionGene::new(1.0));
@@ -241,7 +180,6 @@ impl Genome {
         }
 
         Genome {
-            id: id,
             input_ids_by_name: input_ids_by_name,
             output_ids_by_name: output_ids_by_name,
             output_nodes_by_id: output_nodes_by_id,
@@ -255,7 +193,7 @@ impl Genome {
     /// # Arguments
     ///
     /// * `inputs` = The inputs to evaluate.
-    pub (crate) fn activate(&self, inputs: &HashMap<String, f32>) -> HashMap<String, f32> {
+    pub(crate) fn activate(&self, inputs: &HashMap<String, f32>) -> HashMap<String, f32> {
         // TODO(orglofch): Allow fo parallel computation between layers.
         // TODO(orglofch): This only works for fead-forward NN's right now.
 
@@ -265,8 +203,14 @@ impl Genome {
         let mut out_ids_by_in_id: HashMap<u32, HashSet<u32>> = HashMap::new();
         let mut in_ids_by_out_id: HashMap<u32, HashSet<u32>> = HashMap::new();
         for edge in self.connections_by_edge.keys() {
-            out_ids_by_in_id.entry(edge.0).or_insert(HashSet::new()).insert(edge.1);
-            in_ids_by_out_id.entry(edge.1).or_insert(HashSet::new()).insert(edge.0);
+            out_ids_by_in_id
+                .entry(edge.0)
+                .or_insert(HashSet::new())
+                .insert(edge.1);
+            in_ids_by_out_id
+                .entry(edge.1)
+                .or_insert(HashSet::new())
+                .insert(edge.0);
         }
 
         // TODO(orglofch): Skip connections which don't connect to output.
@@ -316,22 +260,18 @@ impl Genome {
             let mut values: Vec<f32> = Vec::new();
 
             for in_id in in_ids_by_out_id.get(&id).unwrap() {
-                let value = *outputs_by_id.get(in_id).unwrap() * self.connections_by_edge.get(&(*in_id, id)).unwrap().weight;
+                let value = self.connections_by_edge
+                    .get(&(*in_id, id))
+                    .unwrap()
+                    .activate(*outputs_by_id.get(in_id).unwrap());
                 values.push(value);
             }
 
-            let node = self.hidden_nodes_by_id.get(&id)
-                .unwrap_or_else(|| self.output_nodes_by_id.get(&id).unwrap());
+            let node = self.hidden_nodes_by_id.get(&id).unwrap_or_else(|| {
+                self.output_nodes_by_id.get(&id).unwrap()
+            });
 
-            // Include bias.
-            values.push(node.bias);
-
-            // Perform aggregation on the inputs.
-            let aggregation = node.aggregation_fn.aggregate(values);
-
-            let activation = node.activation_fn.eval(aggregation);
-
-            outputs_by_id.insert(id, activation);
+            outputs_by_id.insert(id, node.activate(&values));
         }
 
         let mut outputs: HashMap<String, f32> = HashMap::new();
@@ -368,9 +308,7 @@ impl Genome {
                     Some(ref other_node) => {
                         common_distance += node.distance(other_node, speciation_config);
                     }
-                    None => {
-                        disjoint_genes += 1;
-                    }
+                    None => disjoint_genes += 1,
                 }
             }
 
@@ -398,9 +336,7 @@ impl Genome {
                     Some(ref other_con) => {
                         common_distance += con.distance(other_con, speciation_config);
                     }
-                    None => {
-                        disjoint_genes += 1;
-                    }
+                    None => disjoint_genes += 1,
                 }
             }
 
@@ -434,6 +370,70 @@ impl Genome {
         disjoint_distance + common_connection_distance + common_node_distance
     }
 
+    /// Create a new genome via crossover between this `Genome` and another.
+    ///
+    /// TODO(orglofch): Remove the assumption that self is the more fit of the two genomes.
+    pub(crate) fn crossover(&self, other: &Genome, genome_config: &mut GenomeConfig) -> Genome {
+        // TODO(orglofch): Consider validating that they are exactly the same in terms of names as well.
+        debug_assert_eq!(self.input_ids_by_name.len(), other.input_ids_by_name.len());
+        debug_assert_eq!(
+            self.output_nodes_by_id.len(),
+            other.output_nodes_by_id.len()
+        );
+
+        // TODO(orglofch): Keep the disjoin entries from the more fit parent.
+        // TODO(orglofch): Clone the more fit parent and mutage it.
+        let genome = self.clone();
+        let less_fit_genome = other;
+
+        let mut input_ids_by_name: HashMap<String, u32> = self.input_ids_by_name.clone();
+        let mut output_ids_by_name: HashMap<String, u32> = self.output_ids_by_name.clone(); // TODO(orglofch): Consider relying on the config here.
+        let mut hidden_nodes_by_id: HashMap<u32, NodeGene> =
+            HashMap::with_capacity(self.hidden_nodes_by_id.len());
+        let mut output_nodes_by_id: HashMap<u32, NodeGene> =
+            HashMap::with_capacity(genome_config.outputs.len());
+        let mut connections_by_edge: HashMap<(u32, u32), ConnectionGene> =
+            HashMap::with_capacity(self.connections_by_edge.len());
+
+        // Hidden nodes.
+        for (id, node) in genome.hidden_nodes_by_id.iter() {
+            match less_fit_genome.hidden_nodes_by_id.get(&id) {
+                Some(ref other_node) => {
+                    hidden_nodes_by_id.insert(*id, node.crossover(other_node));
+                }
+                None => (),
+            }
+        }
+
+        // Output nodes.
+        for (id, node) in genome.output_nodes_by_id.iter() {
+            match less_fit_genome.hidden_nodes_by_id.get(&id) {
+                Some(ref other_node) => {
+                    output_nodes_by_id.insert(*id, node.crossover(other_node));
+                }
+                None => (),
+            }
+        }
+
+        // Connections.
+        for (edge, con) in genome.connections_by_edge.iter() {
+            match less_fit_genome.connections_by_edge.get(&edge) {
+                Some(ref other_con) => {
+                    connections_by_edge.insert(*edge, con.crossover(other_con));
+                }
+                None => (),
+            }
+        }
+
+        Genome {
+            input_ids_by_name: input_ids_by_name,
+            output_ids_by_name: output_ids_by_name,
+            output_nodes_by_id: output_nodes_by_id,
+            hidden_nodes_by_id: hidden_nodes_by_id,
+            connections_by_edge: connections_by_edge,
+        }
+    }
+
     /// Mutates the `Genome`.
     ///
     /// # Arguments
@@ -447,16 +447,29 @@ impl Genome {
         // If the sum of the probabilities is greater than 1, normalize the probability range
         // so the sum consistutes a 100% probability. Otherwise, allow the total probability
         // to be less than 1 to allow for a probability of no mutations.
-        let prob = rng.gen_range::<f32>(0.0, sum_prob.max(1.0));
+        let mut prob = rng.gen_range::<f32>(0.0, sum_prob.max(1.0));
 
         if prob < genome_config.mutate_add_con_prob {
             self.mutate_add_connection(genome_config, rng);
-        } else if prob < genome_config.mutate_remove_con_prob {
+            return;
+        }
+        prob -= genome_config.mutate_add_con_prob;
+
+        if prob < genome_config.mutate_remove_con_prob {
             // TODO(orglofch): Implement.
-        } else if prob < genome_config.mutate_add_node_prob {
+            return;
+        }
+        prob -= genome_config.mutate_remove_con_prob;
+
+        if prob < genome_config.mutate_add_node_prob {
             self.mutate_add_node(genome_config, rng);
-        } else if prob < genome_config.mutate_remove_node_prob {
+            return;
+        }
+        prob -= genome_config.mutate_add_node_prob;
+
+        if prob < genome_config.mutate_remove_node_prob {
             // TODO(orglofch): Implement.
+            return;
         }
 
         // TODO(orglofch): Mutate weight.
@@ -464,7 +477,8 @@ impl Genome {
 
     /// Mutates the `Genome` by adding a new `ConnectionGene` structural mutation.
     fn mutate_add_connection<R: Rng>(&mut self, genome_config: &mut GenomeConfig, rng: &mut R) {
-        let active_connections: HashSet<(u32, u32)> = self.connections_by_edge.iter()
+        let active_connections: HashSet<(u32, u32)> = self.connections_by_edge
+            .iter()
             .filter(|entry| entry.1.enabled)
             .map(|entry| *entry.0)
             .collect();
@@ -513,7 +527,7 @@ impl Genome {
             return;
         }
 
-       let connection = rng.choose(&mut possible_connections).unwrap();
+        let connection = rng.choose(&mut possible_connections).unwrap();
 
         // Check if the connection already exists but is disabled.
         {
@@ -525,7 +539,10 @@ impl Genome {
         }
 
         // TODO(orglofch): Random weight?
-        self.connections_by_edge.insert(*connection, ConnectionGene::new(1.0));
+        self.connections_by_edge.insert(
+            *connection,
+            ConnectionGene::new(1.0),
+        );
     }
 
     /// Mutate the `Genome` by adding a new `NodeGene` structural mutation.
@@ -544,14 +561,23 @@ impl Genome {
         let new_id = genome_config
             .innovation_archive
             .record_hidden_node_innovation(split_edge.0, split_edge.1, con.splits);
-        self.hidden_nodes_by_id.insert(new_id, NodeGene::new(AggregationFn::Sum, ActivationFn::Sigmoid));
+        self.hidden_nodes_by_id.insert(
+            new_id,
+            NodeGene::new(AggregationFn::Sum, ActivationFn::Sigmoid),
+        );
 
         // Create two new connections.
         // The first connection is initialized with a weight of 1.
         // The second connection is initilized with the original connections weight.
         // This preserves the original phenotype.
-        self.connections_by_edge.insert((split_edge.0, new_id), ConnectionGene::new(1.0));
-        self.connections_by_edge.insert((new_id, split_edge.1), ConnectionGene::new(con.weight));
+        self.connections_by_edge.insert(
+            (split_edge.0, new_id),
+            ConnectionGene::new(1.0),
+        );
+        self.connections_by_edge.insert(
+            (new_id, split_edge.1),
+            ConnectionGene::new(con.weight),
+        );
     }
 
     /// Mutate the `Genome` by modifying the weight on an existing `NodeGene`.
@@ -606,7 +632,10 @@ impl Genome {
         // Try to find an existing path (out_id -> in_id).
         let mut out_ids_by_in_id: HashMap<u32, HashSet<u32>> = HashMap::new();
         for edge in self.connections_by_edge.keys() {
-            out_ids_by_in_id.entry(edge.0).or_insert(HashSet::new()).insert(edge.1);
+            out_ids_by_in_id
+                .entry(edge.0)
+                .or_insert(HashSet::new())
+                .insert(edge.1);
         }
 
         // BFS to find the input id.
@@ -631,7 +660,8 @@ impl Genome {
     }
 }
 
-pub type Population = Vec<Genome>;
+/// A collection of `Genomes` by id.
+pub type Population = HashMap<u32, Genome>;
 
 // TODO(orglofch): More comprehensive equality tests.
 // TODO(orglofch): Figure out how to force seed the rng without implementing the whole trait.
@@ -640,88 +670,73 @@ pub type Population = Vec<Genome>;
 mod test {
     use super::*;
 
-    // TODO(orglofch): Add to macros.rs.
-    macro_rules! assert_approx_eq {
-        ($a:expr, $b:expr) => ({
-            let (a, b) = (&$a, &$b);
-            assert!((*a - *b).abs() < 1.0e-6,
-                    "{} is not approximately equal to {}", *a, *b);
-        })
-    }
-
     #[test]
     fn test_new_genome_unconnected() {
         let mut inputs = vec!["input_1".to_owned()];
         let mut outputs = vec!["output_1".to_owned()];
-        let mut genome_config = GenomeConfig::new(inputs.clone(), outputs.clone());
+        let mut gen_conf = GenomeConfig::new(inputs.clone(), outputs.clone());
 
-        let genome = Genome::new(1, &mut genome_config);
+        let gen = Genome::new(&mut gen_conf);
 
-        assert_eq!(genome.id, 1);
-        assert_eq!(genome.connections_by_edge.len(), 0);
-        assert_eq!(genome.input_ids_by_name.len(), 1);
-        assert_eq!(genome.hidden_nodes_by_id.len(), 0);
-        assert_eq!(genome.output_ids_by_name.len(), 1);
+        assert_eq!(gen.connections_by_edge.len(), 0);
+        assert_eq!(gen.input_ids_by_name.len(), 1);
+        assert_eq!(gen.hidden_nodes_by_id.len(), 0);
+        assert_eq!(gen.output_ids_by_name.len(), 1);
 
         inputs.push("input_2".to_owned());
-        genome_config.set_inputs(inputs);
+        gen_conf.set_inputs(inputs);
 
-        let genome = Genome::new(2, &mut genome_config);
+        let gen = Genome::new(&mut gen_conf);
 
-        assert_eq!(genome.id, 2);
-        assert_eq!(genome.connections_by_edge.len(), 0);
-        assert_eq!(genome.input_ids_by_name.len(), 2);
-        assert_eq!(genome.hidden_nodes_by_id.len(), 0);
-        assert_eq!(genome.output_ids_by_name.len(), 1);
+        assert_eq!(gen.connections_by_edge.len(), 0);
+        assert_eq!(gen.input_ids_by_name.len(), 2);
+        assert_eq!(gen.hidden_nodes_by_id.len(), 0);
+        assert_eq!(gen.output_ids_by_name.len(), 1);
 
         outputs.push("output_2".to_owned());
-        genome_config.set_outputs(outputs);
+        gen_conf.set_outputs(outputs);
 
-        let genome = Genome::new(3, &mut genome_config);
+        let gen = Genome::new(&mut gen_conf);
 
-        assert_eq!(genome.id, 3);
-        assert_eq!(genome.connections_by_edge.len(), 0);
-        assert_eq!(genome.input_ids_by_name.len(), 2);
-        assert_eq!(genome.hidden_nodes_by_id.len(), 0);
-        assert_eq!(genome.output_ids_by_name.len(), 2);
+        assert_eq!(gen.connections_by_edge.len(), 0);
+        assert_eq!(gen.input_ids_by_name.len(), 2);
+        assert_eq!(gen.hidden_nodes_by_id.len(), 0);
+        assert_eq!(gen.output_ids_by_name.len(), 2);
     }
 
     #[test]
     fn test_new_genome_start_connected() {
         let mut inputs = vec!["input_1".to_owned()];
         let mut outputs = vec!["output_1".to_owned()];
-        let mut genome_config = GenomeConfig::new(inputs.clone(), outputs.clone());
-        genome_config.set_start_connected(true);
+        let mut gen_conf = GenomeConfig::new(inputs.clone(), outputs.clone());
+        gen_conf.set_start_connected(true);
 
-        let genome = Genome::new(1, &mut genome_config);
+        let gen = Genome::new(&mut gen_conf);
 
-        assert_eq!(genome.id, 1);
-        assert_eq!(genome.connections_by_edge.len(), 1);
-        assert_eq!(genome.input_ids_by_name.len(), 1);
-        assert_eq!(genome.hidden_nodes_by_id.len(), 0);
-        assert_eq!(genome.output_ids_by_name.len(), 1);
+        assert_eq!(gen.connections_by_edge.len(), 1);
+        assert_eq!(gen.input_ids_by_name.len(), 1);
+        assert_eq!(gen.hidden_nodes_by_id.len(), 0);
+        assert_eq!(gen.output_ids_by_name.len(), 1);
 
         inputs.push("input_2".to_owned());
-        genome_config.set_inputs(inputs);
+        gen_conf.set_inputs(inputs);
 
-        let genome = Genome::new(2, &mut genome_config);
+        let gen = Genome::new(&mut gen_conf);
 
-        assert_eq!(genome.id, 2);
-        assert_eq!(genome.connections_by_edge.len(), 2);
-        assert_eq!(genome.input_ids_by_name.len(), 2);
-        assert_eq!(genome.hidden_nodes_by_id.len(), 0);
-        assert_eq!(genome.output_ids_by_name.len(), 1);
+        assert_eq!(gen.connections_by_edge.len(), 2);
+        assert_eq!(gen.input_ids_by_name.len(), 2);
+        assert_eq!(gen.hidden_nodes_by_id.len(), 0);
+        assert_eq!(gen.output_ids_by_name.len(), 1);
 
         outputs.push("output_2".to_owned());
-        genome_config.set_outputs(outputs);
+        gen_conf.set_outputs(outputs);
 
-        let genome = Genome::new(3, &mut genome_config);
+        let gen = Genome::new(&mut gen_conf);
 
-        assert_eq!(genome.id, 3);
-        assert_eq!(genome.connections_by_edge.len(), 4);
-        assert_eq!(genome.input_ids_by_name.len(), 2);
-        assert_eq!(genome.hidden_nodes_by_id.len(), 0);
-        assert_eq!(genome.output_ids_by_name.len(), 2);
+        assert_eq!(gen.connections_by_edge.len(), 4);
+        assert_eq!(gen.input_ids_by_name.len(), 2);
+        assert_eq!(gen.hidden_nodes_by_id.len(), 0);
+        assert_eq!(gen.output_ids_by_name.len(), 2);
     }
 
     #[test]
@@ -731,15 +746,15 @@ mod test {
 
         let inputs = vec![input.clone()];
         let outputs = vec![output.clone()];
-        let mut genome_config = GenomeConfig::new(inputs, outputs);
-        genome_config.set_start_connected(false);
+        let mut gen_conf = GenomeConfig::new(inputs, outputs);
+        gen_conf.set_start_connected(false);
 
-        let genome = Genome::new(0, &mut genome_config);
+        let gen = Genome::new(&mut gen_conf);
 
         let mut inputs: HashMap<String, f32> = HashMap::new();
         inputs.insert(input.clone(), 1.0);
 
-        let results = genome.activate(&inputs);
+        let results = gen.activate(&inputs);
 
         assert_approx_eq!(results.get(&output).unwrap(), 0.0);
     }
@@ -752,47 +767,55 @@ mod test {
 
         let inputs = vec![input_1.clone(), input_2.clone()];
         let outputs = vec![output.clone()];
-        let mut genome_config = GenomeConfig::new(inputs, outputs);
-        genome_config.set_start_connected(false);
+        let mut gen_conf = GenomeConfig::new(inputs, outputs);
+        gen_conf.set_start_connected(false);
 
-        let mut genome = Genome::new(0, &mut genome_config);
+        let mut gen = Genome::new(&mut gen_conf);
 
-        genome.output_nodes_by_id.values_mut().next().unwrap().bias = -300.0;
+        gen.output_nodes_by_id.values_mut().next().unwrap().bias = -300.0;
 
-        genome.hidden_nodes_by_id.insert(
-            3,
-            NodeGene::new(
-                AggregationFn::Sum,
-                ActivationFn::Sigmoid,
-            ),
-        );
-        genome.hidden_nodes_by_id.get_mut(&3).unwrap().bias = -100.0;
+        let hidden_1 = NodeGene::new(AggregationFn::Sum, ActivationFn::Sigmoid);
+        gen.hidden_nodes_by_id.insert(3, hidden_1);
+        gen.hidden_nodes_by_id.get_mut(&3).unwrap().bias = -100.0;
 
-        genome.hidden_nodes_by_id.insert(
-            4,
-            NodeGene::new(
-                AggregationFn::Sum,
-                ActivationFn::Sigmoid,
-            ),
-        );
-        genome.hidden_nodes_by_id.get_mut(&4).unwrap().bias = 300.0;
+        let hidden_2 = NodeGene::new(AggregationFn::Sum, ActivationFn::Sigmoid);
+        gen.hidden_nodes_by_id.insert(4, hidden_2);
+        gen.hidden_nodes_by_id.get_mut(&4).unwrap().bias = 300.0;
 
         // TODO(orglofch): This assume input vs output order.
-        genome.connections_by_edge.insert((0, 3), ConnectionGene::new(200.0));
-        genome.connections_by_edge.insert((1, 3), ConnectionGene::new(200.0));
+        gen.connections_by_edge.insert(
+            (0, 3),
+            ConnectionGene::new(200.0),
+        );
+        gen.connections_by_edge.insert(
+            (1, 3),
+            ConnectionGene::new(200.0),
+        );
 
-        genome.connections_by_edge.insert((0, 4), ConnectionGene::new(-200.0));
-        genome.connections_by_edge.insert((1, 4), ConnectionGene::new(-200.0));
+        gen.connections_by_edge.insert(
+            (0, 4),
+            ConnectionGene::new(-200.0),
+        );
+        gen.connections_by_edge.insert(
+            (1, 4),
+            ConnectionGene::new(-200.0),
+        );
 
-        genome.connections_by_edge.insert((3, 2), ConnectionGene::new(200.0));
-        genome.connections_by_edge.insert((4, 2), ConnectionGene::new(200.0));
+        gen.connections_by_edge.insert(
+            (3, 2),
+            ConnectionGene::new(200.0),
+        );
+        gen.connections_by_edge.insert(
+            (4, 2),
+            ConnectionGene::new(200.0),
+        );
 
         // (1, 1) => 0.
         let mut inputs: HashMap<String, f32> = HashMap::new();
         inputs.insert(input_1.clone(), 1.0);
         inputs.insert(input_2.clone(), 1.0);
 
-        let results = genome.activate(&inputs);
+        let results = gen.activate(&inputs);
 
         assert_approx_eq!(results.get(&output).unwrap(), 0.0);
 
@@ -801,7 +824,7 @@ mod test {
         inputs.insert(input_1.clone(), 1.0);
         inputs.insert(input_2.clone(), 0.0);
 
-        let results = genome.activate(&inputs);
+        let results = gen.activate(&inputs);
 
         assert_approx_eq!(results.get(&output).unwrap(), 1.0);
 
@@ -810,7 +833,7 @@ mod test {
         inputs.insert(input_1.clone(), 0.0);
         inputs.insert(input_2.clone(), 1.0);
 
-        let results = genome.activate(&inputs);
+        let results = gen.activate(&inputs);
 
         assert_approx_eq!(results.get(&output).unwrap(), 1.0);
 
@@ -819,216 +842,167 @@ mod test {
         inputs.insert(input_1.clone(), 0.0);
         inputs.insert(input_2.clone(), 0.0);
 
-        let results = genome.activate(&inputs);
+        let results = gen.activate(&inputs);
 
         assert_approx_eq!(results.get(&output).unwrap(), 0.0);
     }
 
     #[test]
     fn test_distance_node() {
-        let inputs = vec!["input_1".to_owned()];
-        let outputs = vec!["output_1".to_owned()];
-        let mut genome_config = GenomeConfig::new(inputs, outputs);
-
-        let mut speciation_config = SpeciationConfig::new();
-        speciation_config.set_compatibility_weight_coefficient(1.0);
-
-        let mut genome_1 = Genome::new(0, &mut genome_config);
-        let mut genome_2 = Genome::new(0, &mut genome_config);
-
-        genome_1.output_nodes_by_id.values_mut().next().unwrap().bias = 1.0;
-        genome_2.output_nodes_by_id.values_mut().next().unwrap().bias = 1.0;
-
-        // Same bias.
-        assert_eq!(
-            genome_1.distance(&genome_2, &speciation_config),
-            genome_2.distance(&genome_1, &speciation_config)
-        );
-        assert_eq!(genome_1.distance(&genome_2, &speciation_config), 0.0);
-
-        genome_1.output_nodes_by_id.values_mut().next().unwrap().bias = 0.5;
-
-        // Bias differs.
-        assert_eq!(
-            genome_1.distance(&genome_2, &speciation_config),
-            genome_2.distance(&genome_1, &speciation_config)
-        );
-        assert_eq!(genome_1.distance(&genome_2, &speciation_config), 0.5);
-
-        speciation_config.set_compatibility_weight_coefficient(0.5);
-
-        // Bias differ and coefficient is fractional.
-        assert_eq!(
-            genome_1.distance(&genome_2, &speciation_config),
-            genome_2.distance(&genome_1, &speciation_config)
-        );
-        assert_eq!(genome_1.distance(&genome_2, &speciation_config), 0.25);
-
-        genome_2.output_nodes_by_id.values_mut().next().unwrap().bias = 0.5;
-
-        // Bias is the same but coefficient is fractional.
-        assert_eq!(
-            genome_1.distance(&genome_2, &speciation_config),
-            genome_2.distance(&genome_1, &speciation_config)
-        );
-        assert_eq!(genome_1.distance(&genome_2, &speciation_config), 0.0);
+        // TODO(orglofch): Implement.
     }
 
     #[test]
     fn test_distance_connection() {
-        let inputs = vec!["input_1".to_owned()];
-        let outputs = vec!["output_1".to_owned()];
-        let mut genome_config = GenomeConfig::new(inputs, outputs);
-        genome_config.set_start_connected(true);
-
-        let mut speciation_config = SpeciationConfig::new();
-        speciation_config.set_compatibility_weight_coefficient(1.0);
-
-        let mut genome_1 = Genome::new(0, &mut genome_config);
-        let mut genome_2 = Genome::new(0, &mut genome_config);
-
-        genome_1.connections_by_edge.get_mut(&(0, 1)).unwrap().weight = 1.0;
-        genome_2.connections_by_edge.get_mut(&(0, 1)).unwrap().weight = 1.0;
-
-        // Same weights.
-        assert_eq!(
-            genome_1.distance(&genome_2, &speciation_config),
-            genome_2.distance(&genome_1, &speciation_config)
-        );
-        assert_eq!(genome_1.distance(&genome_2, &speciation_config), 0.0);
-
-        genome_1.connections_by_edge.get_mut(&(0, 1)).unwrap().weight = 0.5;
-
-        // Weights differ.
-        assert_eq!(
-            genome_1.distance(&genome_2, &speciation_config),
-            genome_2.distance(&genome_1, &speciation_config)
-        );
-        assert_eq!(genome_1.distance(&genome_2, &speciation_config), 0.5);
-
-        speciation_config.set_compatibility_weight_coefficient(0.5);
-
-        // Weights differ and coefficient is fractional.
-        assert_eq!(
-            genome_1.distance(&genome_2, &speciation_config),
-            genome_2.distance(&genome_1, &speciation_config)
-        );
-        assert_eq!(genome_1.distance(&genome_2, &speciation_config), 0.25);
-
-        genome_2.connections_by_edge.get_mut(&(0, 1)).unwrap().weight = 0.5;
-
-        // Weights are the same but coefficient is fractional.
-        assert_eq!(
-            genome_1.distance(&genome_2, &speciation_config),
-            genome_2.distance(&genome_1, &speciation_config)
-        );
-        assert_eq!(genome_1.distance(&genome_2, &speciation_config), 0.0);
+        // TODO(orglofch): Implement.z
     }
 
     #[test]
     fn test_distance_disjoint() {
         let inputs = vec!["input_1".to_owned()];
         let outputs = vec!["output_1".to_owned()];
-        let mut genome_config = GenomeConfig::new(inputs, outputs);
+        let mut gen_conf = GenomeConfig::new(inputs, outputs);
 
-        let mut speciation_config = SpeciationConfig::new();
-        speciation_config.set_compatibility_disjoint_coefficient(1.0);
+        let mut spec_conf = SpeciationConfig::new();
+        spec_conf.set_compatibility_disjoint_coefficient(1.0);
 
-        let mut genome_1 = Genome::new(0, &mut genome_config);
-        let mut genome_2 = Genome::new(1, &mut genome_config);
+        let mut gen_1 = Genome::new(&mut gen_conf);
+        let mut gen_2 = Genome::new(&mut gen_conf);
 
         assert_eq!(
-            genome_1.distance(&genome_2, &speciation_config),
-            genome_2.distance(&genome_1, &speciation_config)
+            gen_1.distance(&gen_2, &spec_conf),
+            gen_2.distance(&gen_1, &spec_conf)
         );
-        assert_eq!(genome_1.distance(&genome_2, &speciation_config), 0.0);
+        assert_eq!(gen_1.distance(&gen_2, &spec_conf), 0.0);
 
         // Nodes are disjoint.
-        genome_1.hidden_nodes_by_id.insert(
-            2,
-            NodeGene::new(
-                AggregationFn::Sum,
-                ActivationFn::Sigmoid,
-            ),
-        );
+        let node = NodeGene::new(AggregationFn::Sum, ActivationFn::Sigmoid);
+        gen_1.hidden_nodes_by_id.insert(2, node);
 
         assert_eq!(
-            genome_1.distance(&genome_2, &speciation_config),
-            genome_2.distance(&genome_1, &speciation_config)
+            gen_1.distance(&gen_2, &spec_conf),
+            gen_2.distance(&gen_1, &spec_conf)
         );
-        assert_eq!(genome_1.distance(&genome_2, &speciation_config), 1.0);
+        assert_eq!(gen_1.distance(&gen_2, &spec_conf), 1.0);
 
         // Nodes and connections are disjoint.
-        genome_2.connections_by_edge.insert((1, 2), ConnectionGene::new(1.0));
+        gen_2.connections_by_edge.insert(
+            (1, 2),
+            ConnectionGene::new(1.0),
+        );
 
         assert_eq!(
-            genome_1.distance(&genome_2, &speciation_config),
-            genome_2.distance(&genome_1, &speciation_config)
+            gen_1.distance(&gen_2, &spec_conf),
+            gen_2.distance(&gen_1, &spec_conf)
         );
-        assert_eq!(genome_1.distance(&genome_2, &speciation_config), 2.0);
+        assert_eq!(gen_1.distance(&gen_2, &spec_conf), 2.0);
 
         // Nodes and connections are disjoint and coefficient is fractional.
-        speciation_config.set_compatibility_disjoint_coefficient(0.5);
+        spec_conf.set_compatibility_disjoint_coefficient(0.5);
 
         assert_eq!(
-            genome_1.distance(&genome_2, &speciation_config),
-            genome_2.distance(&genome_1, &speciation_config)
+            gen_1.distance(&gen_2, &spec_conf),
+            gen_2.distance(&gen_1, &spec_conf)
         );
-        assert_eq!(genome_1.distance(&genome_2, &speciation_config), 1.0);
+        assert_eq!(gen_1.distance(&gen_2, &spec_conf), 1.0);
 
         // Connections are disjoint.
-        genome_2.hidden_nodes_by_id.insert(
-            2,
-            NodeGene::new(
-                AggregationFn::Sum,
-                ActivationFn::Sigmoid,
-            ),
-        );
+        let node = NodeGene::new(AggregationFn::Sum, ActivationFn::Sigmoid);
+        gen_2.hidden_nodes_by_id.insert(2, node);
 
         assert_eq!(
-            genome_1.distance(&genome_2, &speciation_config),
-            genome_2.distance(&genome_1, &speciation_config)
+            gen_1.distance(&gen_2, &spec_conf),
+            gen_2.distance(&gen_1, &spec_conf)
         );
-        assert_eq!(genome_1.distance(&genome_2, &speciation_config), 0.5);
+        assert_eq!(gen_1.distance(&gen_2, &spec_conf), 0.5);
+    }
+
+    #[test]
+    fn test_crossover() {
+        let inputs = vec!["input_1".to_owned()];
+        let outputs = vec!["output_1".to_owned()];
+        let mut gen_conf = GenomeConfig::new(inputs, outputs);
+
+        let mut gen_1 = Genome::new(&mut gen_conf);
+        let mut gen_2 = Genome::new(&mut gen_conf);
+
+        let gen_cross = gen_1.crossover(&gen_2, &mut gen_conf);
+
+        // TODO(orglofch):
+    }
+
+
+    // TODO(orglofch): How do we assert a panic here?
+    #[test]
+    fn test_crossover_incompatible_inputs() {
+        let mut inputs = vec!["input_1".to_owned()];
+        let mut outputs = vec!["ouput_1".to_owned()];
+        let mut gen_conf = GenomeConfig::new(inputs, outputs);
+
+        let gen_1 = Genome::new(&mut gen_conf);
+
+        // Change the number of inputs.
+        inputs.push("input_2".to_owned());
+
+        let gen_2 = Genome::new(&mut gen_conf);
+
+        gen_1.crossover(&gen_2, &mut gen_conf);
+    }
+
+    #[test]
+    fn test_crossover_incompatible_outputs() {
+        let mut inputs = vec!["input_1".to_owned()];
+        let mut outputs = vec!["ouput_1".to_owned()];
+        let mut gen_conf = GenomeConfig::new(inputs, outputs);
+
+        let gen_1 = Genome::new(&mut gen_conf);
+
+        // Change the number of outputs.
+        outputs.push("output_2".to_owned());
+
+        let gen_2 = Genome::new(&mut gen_conf);
+
+        gen_1.crossover(&gen_2, &mut gen_conf);
     }
 
     #[test]
     fn test_mutate_add_connection_new() {
         let inputs = vec!["input_1".to_owned()];
         let outputs = vec!["output_1".to_owned()];
-        let mut genome_config = GenomeConfig::new(inputs, outputs);
-        genome_config.set_start_connected(false);
+        let mut gen_conf = GenomeConfig::new(inputs, outputs);
+        gen_conf.set_start_connected(false);
 
         let mut rng = rand::thread_rng();
 
-        let mut genome = Genome::new(1, &mut genome_config);
+        let mut gen = Genome::new(&mut gen_conf);
 
-        genome.mutate_add_connection(&mut genome_config, &mut rng);
+        gen.mutate_add_connection(&mut gen_conf, &mut rng);
 
-        assert_eq!(genome.connections_by_edge.len(), 1);
-        assert_eq!(genome.input_ids_by_name.len(), 1);
-        assert_eq!(genome.hidden_nodes_by_id.len(), 0);
-        assert_eq!(genome.output_ids_by_name.len(), 1);
+        assert_eq!(gen.connections_by_edge.len(), 1);
+        assert_eq!(gen.input_ids_by_name.len(), 1);
+        assert_eq!(gen.hidden_nodes_by_id.len(), 0);
+        assert_eq!(gen.output_ids_by_name.len(), 1);
     }
 
     #[test]
     fn test_mutate_add_connection_no_free_connection() {
         let inputs = vec!["input_1".to_owned()];
         let outputs = vec!["output_1".to_owned()];
-        let mut genome_config = GenomeConfig::new(inputs, outputs);
-        genome_config.set_start_connected(true)
-            .set_allow_recurrences(false);
+        let mut gen_conf = GenomeConfig::new(inputs, outputs);
+        gen_conf.set_start_connected(true).set_allow_recurrences(
+            false,
+        );
 
         let mut rng = rand::thread_rng();
 
-        let mut genome = Genome::new(1, &mut genome_config);
+        let mut gen = Genome::new(&mut gen_conf);
 
-        genome.mutate_add_connection(&mut genome_config, &mut rng);
+        gen.mutate_add_connection(&mut gen_conf, &mut rng);
 
-        assert_eq!(genome.connections_by_edge.len(), 1);
-        assert_eq!(genome.input_ids_by_name.len(), 1);
-        assert_eq!(genome.hidden_nodes_by_id.len(), 0);
-        assert_eq!(genome.output_ids_by_name.len(), 1);
+        assert_eq!(gen.connections_by_edge.len(), 1);
+        assert_eq!(gen.input_ids_by_name.len(), 1);
+        assert_eq!(gen.hidden_nodes_by_id.len(), 0);
+        assert_eq!(gen.output_ids_by_name.len(), 1);
     }
 
     // TODO(orglofch): Test with recurrences enabled.
@@ -1039,37 +1013,37 @@ mod test {
     fn test_mutate_add_node() {
         let inputs = vec!["input_1".to_owned()];
         let outputs = vec!["output_1".to_owned()];
-        let mut genome_config = GenomeConfig::new(inputs, outputs);
-        genome_config.set_start_connected(true);
+        let mut gen_conf = GenomeConfig::new(inputs, outputs);
+        gen_conf.set_start_connected(true);
 
         let mut rng = rand::thread_rng();
 
-        let mut genome = Genome::new(1, &mut genome_config);
+        let mut gen = Genome::new(&mut gen_conf);
 
-        genome.mutate_add_node(&mut genome_config, &mut rng);
+        gen.mutate_add_node(&mut gen_conf, &mut rng);
 
-        assert_eq!(genome.connections_by_edge.len(), 3);
-        assert_eq!(genome.input_ids_by_name.len(), 1);
-        assert_eq!(genome.hidden_nodes_by_id.len(), 1);
-        assert_eq!(genome.output_ids_by_name.len(), 1);
+        assert_eq!(gen.connections_by_edge.len(), 3);
+        assert_eq!(gen.input_ids_by_name.len(), 1);
+        assert_eq!(gen.hidden_nodes_by_id.len(), 1);
+        assert_eq!(gen.output_ids_by_name.len(), 1);
     }
 
     #[test]
     fn test_mutate_add_node_no_free_connection() {
         let inputs = vec!["input_1".to_owned()];
         let outputs = vec!["output_1".to_owned()];
-        let mut genome_config = GenomeConfig::new(inputs, outputs);
-        genome_config.set_start_connected(false);
+        let mut gen_conf = GenomeConfig::new(inputs, outputs);
+        gen_conf.set_start_connected(false);
 
         let mut rng = rand::thread_rng();
 
-        let mut genome = Genome::new(1, &mut genome_config);
+        let mut gen = Genome::new(&mut gen_conf);
 
-        genome.mutate_add_node(&mut genome_config, &mut rng);
+        gen.mutate_add_node(&mut gen_conf, &mut rng);
 
-        assert_eq!(genome.connections_by_edge.len(), 0);
-        assert_eq!(genome.input_ids_by_name.len(), 1);
-        assert_eq!(genome.hidden_nodes_by_id.len(), 0);
-        assert_eq!(genome.output_ids_by_name.len(), 1);
+        assert_eq!(gen.connections_by_edge.len(), 0);
+        assert_eq!(gen.input_ids_by_name.len(), 1);
+        assert_eq!(gen.hidden_nodes_by_id.len(), 0);
+        assert_eq!(gen.output_ids_by_name.len(), 1);
     }
 }

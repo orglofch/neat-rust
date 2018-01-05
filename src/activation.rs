@@ -1,4 +1,4 @@
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum ActivationFn {
     Sigmoid,
     Tanh,
@@ -112,4 +112,19 @@ fn square_activation(val: f32) -> f32 {
 #[inline]
 fn cube_activation(val: f32) -> f32 {
     panic!("TODO(orglofch): Implement");
+}
+
+// TODO(orglofch): Add some more robust goldens.
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    pub fn test_sigmoid_activation() {
+        let function = ActivationFn::Sigmoid;
+
+        assert_approx_eq!(function.eval(0.0), 0.5);
+        assert_approx_eq!(function.eval(100.0), 1.0);
+        assert_approx_eq!(function.eval(-100.0), 0.0);
+    }
 }

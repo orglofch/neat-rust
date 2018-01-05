@@ -1,13 +1,13 @@
 use std::f32;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum AggregationFn {
     Sum,
     Product,
     Max,
     Min,
-    MaxAbs,
-    Median,
+    AbsMax,
+    // TODO(orglofch): Median
     Mean,
 }
 
@@ -18,8 +18,7 @@ impl AggregationFn {
             AggregationFn::Product => product_aggregation(values),
             AggregationFn::Max => max_aggregation(values),
             AggregationFn::Min => min_aggregation(values),
-            AggregationFn::MaxAbs => max_abs_aggregation(values),
-            AggregationFn::Median => median_aggregation(values),
+            AggregationFn::AbsMax => abs_max_aggregation(values),
             AggregationFn::Mean => mean_aggregation(values),
         }
     }
@@ -46,17 +45,75 @@ fn min_aggregation(values: Vec<f32>) -> f32 {
 }
 
 #[inline]
-fn max_abs_aggregation(values: Vec<f32>) -> f32 {
-    values.into_iter().map(f32::abs).fold(f32::MAX, f32::min)
-}
-
-#[inline]
-fn median_aggregation(values: Vec<f32>) -> f32 {
-    panic!("TODO(orglofch): Implement");
+fn abs_max_aggregation(values: Vec<f32>) -> f32 {
+    values.into_iter().map(f32::abs).fold(f32::MIN, f32::max)
 }
 
 #[inline]
 fn mean_aggregation(values: Vec<f32>) -> f32 {
     let count = values.len() as f32;
-    sum_aggregation(values) / count
+    if count == 0.0 {
+        0.0
+    } else {
+        sum_aggregation(values) / count
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    pub fn test_sum_aggregation() {
+        let function = AggregationFn::Sum;
+
+        assert_approx_eq!(function.aggregate(vec![]), 0.0);
+        assert_approx_eq!(function.aggregate(vec![1.0, 2.0, 3.0, 4.0]), 10.0);
+        assert_approx_eq!(function.aggregate(vec![-1.0, 2.0, -3.0, 4.0]), 2.0);
+    }
+
+    #[test]
+    pub fn test_prod_aggregation() {
+        let function = AggregationFn::Product;
+
+        assert_approx_eq!(function.aggregate(vec![]), 1.0);
+        assert_approx_eq!(function.aggregate(vec![-1.0, 2.0, 2.0]), -4.0);
+        assert_approx_eq!(function.aggregate(vec![1.0, 2.0, 0.0]), 0.0);
+    }
+
+    #[test]
+    pub fn test_max_aggregation() {
+        let function = AggregationFn::Max;
+
+        assert_approx_eq!(function.aggregate(vec![]), f32::MIN);
+        assert_approx_eq!(function.aggregate(vec![3.0, 1.0, 2.0]), 3.0);
+        assert_approx_eq!(function.aggregate(vec![-1.0, -2.0, -10.0]), -1.0);
+    }
+
+    #[test]
+    pub fn test_min_aggregation() {
+        let function = AggregationFn::Min;
+
+        assert_approx_eq!(function.aggregate(vec![]), f32::MAX);
+        assert_approx_eq!(function.aggregate(vec![3.0, 1.0, 2.0]), 1.0);
+        assert_approx_eq!(function.aggregate(vec![-1.0, -2.0, -10.0]), -10.0);
+    }
+
+    #[test]
+    pub fn test_max_abs_aggregation() {
+        let function = AggregationFn::AbsMax;
+
+        assert_approx_eq!(function.aggregate(vec![]), f32::MIN);
+        assert_approx_eq!(function.aggregate(vec![3.0, 1.0, 2.0]), 3.0);
+        assert_approx_eq!(function.aggregate(vec![-1.0, -2.0, -10.0]), 10.0);
+    }
+
+    #[test]
+    pub fn test_mean_aggregation() {
+        let function = AggregationFn::Mean;
+
+        assert_approx_eq!(function.aggregate(vec![]), 0.0);
+        assert_approx_eq!(function.aggregate(vec![2.0, 1.0, 3.0, 4.0]), 2.5);
+        assert_approx_eq!(function.aggregate(vec![-1.0, -2.0, 1.0, 2.0]), 0.0);
+    }
 }
