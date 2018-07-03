@@ -1,10 +1,3 @@
-[root]
-name = "neat-rust"
-version = "0.1.0"
-dependencies = [
- "rand 0.3.18 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
 [[package]]
 name = "bitflags"
 version = "0.7.0"
@@ -30,6 +23,13 @@ dependencies = [
 name = "libc"
 version = "0.2.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "neat-rust"
+version = "0.1.0"
+dependencies = [
+ "rand 0.3.18 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "rand"

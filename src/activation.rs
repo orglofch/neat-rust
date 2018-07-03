@@ -15,6 +15,7 @@ pub enum ActivationFn {
     Hat,
     Square,
     Cube,
+    Sinc,
 }
 
 impl ActivationFn {
@@ -35,9 +36,13 @@ impl ActivationFn {
             ActivationFn::Hat => hat_activation(val),
             ActivationFn::Square => square_activation(val),
             ActivationFn::Cube => cube_activation(val),
+            ActivationFn::Sinc => sinc_activation(val),
         }
     }
 }
+
+// TODO(orglofch): Python neat skews the input numbers.
+// TODO(orglofch): Consider others https://en.wikipedia.org/wiki/Activation_function
 
 #[inline]
 fn sigmoid_activation(val: f32) -> f32 {
@@ -46,17 +51,17 @@ fn sigmoid_activation(val: f32) -> f32 {
 
 #[inline]
 fn tanh_activation(val: f32) -> f32 {
-    panic!("TODO(orglofch): Implement");
+    val.tanh()
 }
 
 #[inline]
 fn sin_activation(val: f32) -> f32 {
-    panic!("TODO(orglofch): Implement");
+    val.sin()
 }
 
 #[inline]
 fn gauss_activation(val: f32) -> f32 {
-    panic!("TODO(orglofch): Implement");
+    (-1.0 * val * val).exp()
 }
 
 #[inline]
@@ -114,6 +119,11 @@ fn cube_activation(val: f32) -> f32 {
     panic!("TODO(orglofch): Implement");
 }
 
+#[inline]
+fn sinc_activation(val: f32) -> f32 {
+    panic!("TODO(orglofch): Implement");
+}
+
 // TODO(orglofch): Add some more robust goldens.
 #[cfg(test)]
 mod test {
@@ -125,6 +135,33 @@ mod test {
 
         assert_approx_eq!(function.eval(0.0), 0.5);
         assert_approx_eq!(function.eval(100.0), 1.0);
+        assert_approx_eq!(function.eval(-100.0), 0.0);
+    }
+
+    #[test]
+    pub fn test_tanh_activation() {
+        let function = ActivationFn::Tanh;
+
+        assert_approx_eq!(function.eval(0.0), (0.0_f32).tanh());
+        assert_approx_eq!(function.eval(1.0), (1.0_f32).tanh());
+        assert_approx_eq!(function.eval(0.5), (0.5_f32).tanh());
+    }
+
+    #[test]
+    pub fn test_sin_activation() {
+        let function = ActivationFn::Sin;
+
+        assert_approx_eq!(function.eval(0.0), (0.0_f32).sin());
+        assert_approx_eq!(function.eval(1.0), (1.0_f32).sin());
+        assert_approx_eq!(function.eval(0.5), (0.5_f32).sin());
+    }
+
+    #[test]
+    pub fn test_gauss_activation() {
+        let function = ActivationFn::Gauss;
+
+        assert_approx_eq!(function.eval(0.0), 1.0);
+        assert_approx_eq!(function.eval(100.0), 0.0);
         assert_approx_eq!(function.eval(-100.0), 0.0);
     }
 }
