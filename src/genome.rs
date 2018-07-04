@@ -922,17 +922,18 @@ mod test {
         // TODO(orglofch):
     }
 
-    // TODO(orglofch): How do we assert a panic here?
-    /*#[test]
+    #[test]
+    #[should_panic]
     fn test_crossover_incompatible_inputs() {
         let mut inputs = vec!["input_1".to_owned()];
-        let mut outputs = vec!["ouput_1".to_owned()];
-        let mut gen_conf = GenomeConfig::new(inputs, outputs);
+        let outputs = vec!["ouput_1".to_owned()];
+        let mut gen_conf = GenomeConfig::new(inputs.clone(), outputs.clone());
 
         let gen_1 = Genome::new(&mut gen_conf);
 
         // Change the number of inputs.
         inputs.push("input_2".to_owned());
+        gen_conf = GenomeConfig::new(inputs.clone(), outputs.clone());
 
         let gen_2 = Genome::new(&mut gen_conf);
 
@@ -940,20 +941,22 @@ mod test {
     }
 
     #[test]
+    #[should_panic]
     fn test_crossover_incompatible_outputs() {
-        let mut inputs = vec!["input_1".to_owned()];
+        let inputs = vec!["input_1".to_owned()];
         let mut outputs = vec!["ouput_1".to_owned()];
-        let mut gen_conf = GenomeConfig::new(inputs, outputs);
+        let mut gen_conf = GenomeConfig::new(inputs.clone(), outputs.clone());
 
         let gen_1 = Genome::new(&mut gen_conf);
 
         // Change the number of outputs.
         outputs.push("output_2".to_owned());
+        gen_conf = GenomeConfig::new(inputs.clone(), outputs.clone());
 
         let gen_2 = Genome::new(&mut gen_conf);
 
         gen_1.crossover(&gen_2, &mut gen_conf);
-    }*/
+    }
 
     #[test]
     fn test_mutate_add_connection_new() {
