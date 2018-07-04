@@ -87,8 +87,13 @@ fn clamped_activation(_: f32) -> f32 {
 }
 
 #[inline]
-fn inv_activation(_: f32) -> f32 {
-    panic!("TODO(orglofch): Implement");
+fn inv_activation(val: f32) -> f32 {
+    let inv = 1.0 / val;
+    if inv.is_infinite() {
+        0.0
+    } else {
+        inv
+    }
 }
 
 #[inline]
@@ -165,6 +170,16 @@ mod test {
         assert_approx_eq!(function.eval(0.0), 1.0);
         assert_approx_eq!(function.eval(100.0), 0.0);
         assert_approx_eq!(function.eval(-100.0), 0.0);
+    }
+
+    #[test]
+    pub fn test_inv_activation() {
+        let function = ActivationFn::Inv;
+
+        assert_approx_eq!(function.eval(0.0), 0.0);
+        assert_approx_eq!(function.eval(1.0), 1.0);
+        assert_approx_eq!(function.eval(2.0), 0.5);
+        assert_approx_eq!(function.eval(-4.0), -0.25);
     }
 
     #[test]
