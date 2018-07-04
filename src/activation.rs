@@ -43,7 +43,7 @@ impl ActivationFn {
     }
 }
 
-// TODO(orglofch): Python neat skews the input numbers.
+// TODO(orglofch): Skew the inputs to prevent infinite values (like in python neat).
 // TODO(orglofch): Consider others https://en.wikipedia.org/wiki/Activation_function
 
 #[inline]
@@ -72,8 +72,8 @@ fn relu_activation(_: f32) -> f32 {
 }
 
 #[inline]
-fn softplus_activation(_: f32) -> f32 {
-    panic!("TODO(orglofch): Implement");
+fn softplus_activation(val: f32) -> f32 {
+    (1.0 + val.exp()).ln()
 }
 
 #[inline]
@@ -169,6 +169,14 @@ mod test {
 
         assert_approx_eq!(function.eval(0.0), 1.0);
         assert_approx_eq!(function.eval(100.0), 0.0);
+        assert_approx_eq!(function.eval(-100.0), 0.0);
+    }
+
+    #[test]
+    pub fn test_softplus_activation() {
+        let function = ActivationFn::SoftPlus;
+
+        assert_approx_eq!(function.eval(0.0), (2.0_f32).ln());
         assert_approx_eq!(function.eval(-100.0), 0.0);
     }
 
