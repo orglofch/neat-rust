@@ -82,8 +82,6 @@ pub fn speciate(population: &Population, speciation_config: &SpeciationConfig) -
             .insert(*id);
     }
 
-    println!("SPECIES BY PROTO ID {:?}", species_by_proto_id);
-
     return species_by_proto_id
         .into_iter()
         .map(|(_, values)| values)
@@ -121,8 +119,8 @@ mod test {
 
         let species = speciate(&population, &speciation_conf);
 
-        println!("SPECIES {:?}", species);
-
-        assert!(species.len() == 2);
+        assert_eq!(species.len(), 2);
+        assert!(species.contains(&vec!(1).into_iter().collect()));
+        assert!(species.contains(&vec!(2, 3).into_iter().collect()));
     }
 }

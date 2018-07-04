@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use checkpoint::CheckpointConfig;
 use fitness::FitnessConfig;
 use genome::{Genome, GenomeConfig, Population};
-use speciation::SpeciationConfig;
+use speciation::{speciate, SpeciationConfig};
 
 enum ConfigErrorType {
 }
@@ -66,54 +66,21 @@ impl Config {
         for _ in 0..100000 {
             let fitness_by_id = (self.fitness_config.fitness_fn)(&population);
 
-            // TODO(orglofch): We probavbly want a pool allocator for new genomes and connections.
+            // TODO(orglofch): We probably want a pool allocator for new genomes and connections.
 
-            // TODO(orglofch): Possible change the way this is layed out depending on
-            // the compatibility threshold.
-            let mut species_by_proto_id: HashMap<u32, Vec<u32>> = HashMap::new();
-
-            // Speciate the genomes into groups by some arbitrary protypical genomes.
-            // TODO(orglofch): This whole iteration loop could be cleaned up.
-            for (id, ref genome) in population.iter() {
-                if species_by_proto_id.is_empty() {
-                    species_by_proto_id.insert(*id, vec![*id]);
-                } else {
-                    // Find the first species that the genome is compatible with.
-                    // If no such species can be found then create a new species.
-                    // TODO(orglofch): Maybe find the best species?
-                    let mut best_species = None;
-                    for (proto_id, genomes) in species_by_proto_id.iter_mut() {
-                        let proto_genome = population.get(&proto_id).unwrap();
-
-                        let distance = proto_genome.distance(&genome, &self.speciation_config);
-
-                        if distance <= self.speciation_config.compatibility_threshold {
-                            best_species = Some(*id);
-                            genomes.push(*id);
-                            break;
-                        }
-                    }
-
-                    // If a best species couldn't be found, create a new species for the genome
-                    // using it as the prototypical genome.
-                    species_by_proto_id
-                        .entry(best_species.unwrap_or(*id))
-                        .or_insert(Vec::new())
-                        .push(*id);
-                }
-            }
+            let species = speciate(&population, &self.speciation_config);
 
             // Calculate the weighted fitness of the population groups.
-            let mut species_fitness_by_proto_id: HashMap<u32, f32> = HashMap::new();
-            for (proto_id, genomes) in species_by_proto_id.iter() {
-                let fitness_sum: f32 = genomes
+            /*let mut species_fitness_by_proto_id: HashMap<u32, f32> = HashMap::new();
+            for species in species.iter() {
+                let fitness_sum: f32 = species
                     .iter()
                 // TODO(orglofch): Possible don't default to 0 or at least provide a warning that we're
                     // doing so.
                     .map(|id| fitness_by_id.get(&id).unwrap_or(&0.0))
                     .sum();
                 species_fitness_by_proto_id.insert(*proto_id, fitness_sum / genomes.len() as f32);
-            }
+            }*/
 
             // Perform intra-species crossover based on fitness.
 
