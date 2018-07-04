@@ -132,6 +132,7 @@ pub struct Genome {
 }
 
 impl Genome {
+    // TODO(orglofch): Try to make GenomeConfig immutable if we can factor out the innovation archive.
     pub(crate) fn new(genome_config: &mut GenomeConfig) -> Genome {
         let mut input_ids_by_name: HashMap<String, u32> = HashMap::with_capacity(genome_config.inputs.len());
         let mut output_ids_by_name: HashMap<String, u32> = HashMap::with_capacity(genome_config.outputs.len());
@@ -379,9 +380,7 @@ impl Genome {
         let genome = self.clone();
         let less_fit_genome = other;
 
-        let mut input_ids_by_name: HashMap<String, u32> = self.input_ids_by_name.clone();
         // TODO(orglofch): Consider relying on the config here.
-        let mut output_ids_by_name: HashMap<String, u32> = self.output_ids_by_name.clone();
         let mut hidden_nodes_by_id: HashMap<u32, NodeGene> = HashMap::with_capacity(self.hidden_nodes_by_id.len());
         let mut output_nodes_by_id: HashMap<u32, NodeGene> = HashMap::with_capacity(genome_config.outputs.len());
         let mut connections_by_edge: HashMap<(u32, u32), ConnectionGene> =
@@ -418,8 +417,8 @@ impl Genome {
         }
 
         Genome {
-            input_ids_by_name: input_ids_by_name,
-            output_ids_by_name: output_ids_by_name,
+            input_ids_by_name: self.input_ids_by_name.clone(),
+            output_ids_by_name: self.output_ids_by_name.clone(),
             output_nodes_by_id: output_nodes_by_id,
             hidden_nodes_by_id: hidden_nodes_by_id,
             connections_by_edge: connections_by_edge,
@@ -914,10 +913,10 @@ mod test {
         let outputs = vec!["output_1".to_owned()];
         let mut gen_conf = GenomeConfig::new(inputs, outputs);
 
-        let mut gen_1 = Genome::new(&mut gen_conf);
-        let mut gen_2 = Genome::new(&mut gen_conf);
+        let gen_1 = Genome::new(&mut gen_conf);
+        let gen_2 = Genome::new(&mut gen_conf);
 
-        let gen_cross = gen_1.crossover(&gen_2, &mut gen_conf);
+        let _ = gen_1.crossover(&gen_2, &mut gen_conf);
 
         // TODO(orglofch):
     }

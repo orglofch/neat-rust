@@ -96,7 +96,10 @@ impl Config {
 
                     // If a best species couldn't be found, create a new species for the genome
                     // using it as the prototypical genome.
-                    species_by_proto_id.entry(best_species.unwrap_or(*id)).or_insert(Vec::new()).push(*id);
+                    species_by_proto_id
+                        .entry(best_species.unwrap_or(*id))
+                        .or_insert(Vec::new())
+                        .push(*id);
                 }
             }
 
