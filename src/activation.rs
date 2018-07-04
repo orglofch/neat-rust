@@ -105,8 +105,8 @@ fn abs_activation(val: f32) -> f32 {
 }
 
 #[inline]
-fn hat_activation(_: f32) -> f32 {
-    panic!("TODO(orglofch): Implement");
+fn hat_activation(val: f32) -> f32 {
+    (1.0 - val.abs()).max(0.0)
 }
 
 #[inline]
@@ -172,6 +172,17 @@ mod test {
         assert_approx_eq!(function.eval(0.0), 0.0);
         assert_approx_eq!(function.eval(10.0), 10.0);
         assert_approx_eq!(function.eval(-10.0), 10.0);
+    }
+
+    #[test]
+    pub fn test_hat_activation() {
+        let function = ActivationFn::Hat;
+
+        assert_approx_eq!(function.eval(0.0), 1.0);
+        assert_approx_eq!(function.eval(1.0), 0.0);
+        assert_approx_eq!(function.eval(-1.0), 0.0);
+        assert_approx_eq!(function.eval(0.5), 0.5);
+        assert_approx_eq!(function.eval(-0.5), 0.5);
     }
 
     #[test]
