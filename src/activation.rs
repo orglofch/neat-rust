@@ -1,3 +1,5 @@
+use std::f32;
+
 const EPSILON: f32 = 1e-7;
 
 #[derive(Clone, Copy)]
@@ -127,8 +129,8 @@ fn cube_activation(val: f32) -> f32 {
 }
 
 #[inline]
-fn sinc_activation(_: f32) -> f32 {
-    panic!("TODO(orglofch): Implement");
+fn sinc_activation(val: f32) -> f32 {
+    if val == 0.0 { 1.0 } else { val.sin() / val }
 }
 
 // TODO(orglofch): Add some more robust goldens.
@@ -273,5 +275,16 @@ mod test {
         assert_approx_eq!(function.eval(0.0), 0.0);
         assert_approx_eq!(function.eval(2.0), 8.0);
         assert_approx_eq!(function.eval(-2.0), -8.0);
+    }
+
+    #[test]
+    pub fn test_sinc_activation() {
+        let function = ActivationFn::Sinc;
+
+        assert_approx_eq!(function.eval(0.0), 1.0);
+        assert_approx_eq!(function.eval(f32::consts::PI), 0.0);
+        assert_approx_eq!(function.eval(-1.0), (-1.0_f32).sin() / -1.0);
+        assert_approx_eq!(function.eval(1000000.0), 0.0);
+        assert_approx_eq!(function.eval(-1000000.0), 0.0);
     }
 }
