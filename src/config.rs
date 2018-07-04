@@ -71,16 +71,16 @@ impl Config {
             let species = speciate(&population, &self.speciation_config);
 
             // Calculate the weighted fitness of the population groups.
-            /*let mut species_fitness_by_proto_id: HashMap<u32, f32> = HashMap::new();
-            for species in species.iter() {
-                let fitness_sum: f32 = species
+            let mut species_fitness_by_proto_id: HashMap<u32, f32> = HashMap::new();
+            for (proto_id, genome_ids) in species.iter() {
+                let fitness_sum: f32 = genome_ids
                     .iter()
                 // TODO(orglofch): Possible don't default to 0 or at least provide a warning that we're
-                    // doing so.
+                // doing so.
                     .map(|id| fitness_by_id.get(&id).unwrap_or(&0.0))
                     .sum();
-                species_fitness_by_proto_id.insert(*proto_id, fitness_sum / genomes.len() as f32);
-            }*/
+                species_fitness_by_proto_id.insert(*proto_id, fitness_sum / genome_ids.len() as f32);
+            }
 
             // Perform intra-species crossover based on fitness.
 
