@@ -50,7 +50,7 @@ impl SpeciationConfig {
 /// * `population` - The population of `Genome` instances to speciate.
 ///
 /// * `speciation_config` - The config to use in speciating the `Genome` instances.
-pub fn speciate(population: &Population, speciation_config: &SpeciationConfig) -> Vec<HashSet<u32>> {
+pub fn speciate(population: &Population, speciation_config: &SpeciationConfig) -> HashMap<u32, HashSet<u32>> {
     // TODO(orglofch): Guess number of species if this is sufficiently large.
     let mut species_by_proto_id: HashMap<u32, HashSet<u32>> = HashMap::new();
 
@@ -82,10 +82,7 @@ pub fn speciate(population: &Population, speciation_config: &SpeciationConfig) -
             .insert(*id);
     }
 
-    return species_by_proto_id
-        .into_iter()
-        .map(|(_, values)| values)
-        .collect();
+    return species_by_proto_id;
 }
 
 #[cfg(test)]
@@ -120,7 +117,7 @@ mod test {
         let species = speciate(&population, &speciation_conf);
 
         assert_eq!(species.len(), 2);
-        assert!(species.contains(&vec!(1).into_iter().collect()));
-        assert!(species.contains(&vec!(2, 3).into_iter().collect()));
+        assert!(species.values().find(|val| **val == vec!(1).into_iter().collect()).is_some());
+        assert!(species.values().find(|val| **val == vec!(2, 3).into_iter().collect()).is_some());
     }
 }
