@@ -100,8 +100,8 @@ fn exp_activation(_: f32) -> f32 {
 }
 
 #[inline]
-fn abs_activation(_: f32) -> f32 {
-    panic!("TODO(orglofch): Implement");
+fn abs_activation(val: f32) -> f32 {
+    val.abs()
 }
 
 #[inline]
@@ -163,6 +163,15 @@ mod test {
         assert_approx_eq!(function.eval(0.0), 1.0);
         assert_approx_eq!(function.eval(100.0), 0.0);
         assert_approx_eq!(function.eval(-100.0), 0.0);
+    }
+
+    #[test]
+    pub fn test_abs_activation() {
+        let function = ActivationFn::Abs;
+
+        assert_approx_eq!(function.eval(0.0), 0.0);
+        assert_approx_eq!(function.eval(10.0), 10.0);
+        assert_approx_eq!(function.eval(-10.0), 10.0);
     }
 
     #[test]
