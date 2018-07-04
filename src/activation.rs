@@ -67,8 +67,8 @@ fn gauss_activation(val: f32) -> f32 {
 }
 
 #[inline]
-fn relu_activation(_: f32) -> f32 {
-    panic!("TODO(orglofch): Implement");
+fn relu_activation(val: f32) -> f32 {
+    if val > 0.0 { val } else { 0.0 }
 }
 
 #[inline]
@@ -170,6 +170,17 @@ mod test {
         assert_approx_eq!(function.eval(0.0), 1.0);
         assert_approx_eq!(function.eval(100.0), 0.0);
         assert_approx_eq!(function.eval(-100.0), 0.0);
+    }
+
+    #[test]
+    pub fn test_relu_activation() {
+        let function = ActivationFn::ReLU;
+
+        assert_approx_eq!(function.eval(0.0), 0.0);
+        assert_approx_eq!(function.eval(-EPSILON), 0.0);
+        assert_approx_eq!(function.eval(-100.0), 0.0);
+        assert_approx_eq!(function.eval(2.0), 2.0);
+        assert_approx_eq!(function.eval(100.0), 100.0);
     }
 
     #[test]
