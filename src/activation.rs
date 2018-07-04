@@ -95,8 +95,8 @@ fn log_activation(_: f32) -> f32 {
 }
 
 #[inline]
-fn exp_activation(_: f32) -> f32 {
-    panic!("TODO(orglofch): Implement");
+fn exp_activation(val: f32) -> f32 {
+    val.exp()
 }
 
 #[inline]
@@ -163,6 +163,15 @@ mod test {
         assert_approx_eq!(function.eval(0.0), 1.0);
         assert_approx_eq!(function.eval(100.0), 0.0);
         assert_approx_eq!(function.eval(-100.0), 0.0);
+    }
+
+    #[test]
+    pub fn test_exp_activation() {
+        let function = ActivationFn::Exp;
+
+        assert_approx_eq!(function.eval(0.0), (0.0_f32).exp());
+        assert_approx_eq!(function.eval(1.0), (1.0_f32).exp());
+        assert_approx_eq!(function.eval(2.0), (2.0_f32).exp());
     }
 
     #[test]
