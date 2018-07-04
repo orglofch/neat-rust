@@ -82,8 +82,8 @@ fn identity_activation(_: f32) -> f32 {
 }
 
 #[inline]
-fn clamped_activation(_: f32) -> f32 {
-    panic!("TODO(orglofch): Implement");
+fn clamped_activation(val: f32) -> f32 {
+    val.max(-1.0).min(1.0)
 }
 
 #[inline]
@@ -170,6 +170,15 @@ mod test {
         assert_approx_eq!(function.eval(0.0), 1.0);
         assert_approx_eq!(function.eval(100.0), 0.0);
         assert_approx_eq!(function.eval(-100.0), 0.0);
+    }
+
+    #[test]
+    pub fn test_clamped_activation() {
+        let function = ActivationFn::Clamped;
+
+        assert_approx_eq!(function.eval(0.0), 0.0);
+        assert_approx_eq!(function.eval(2.0), 1.0);
+        assert_approx_eq!(function.eval(-2.0), -1.0);
     }
 
     #[test]
