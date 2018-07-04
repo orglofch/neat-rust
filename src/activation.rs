@@ -65,62 +65,62 @@ fn gauss_activation(val: f32) -> f32 {
 }
 
 #[inline]
-fn relu_activation(val: f32) -> f32 {
+fn relu_activation(_: f32) -> f32 {
     panic!("TODO(orglofch): Implement");
 }
 
 #[inline]
-fn softplus_activation(val: f32) -> f32 {
+fn softplus_activation(_: f32) -> f32 {
     panic!("TODO(orglofch): Implement");
 }
 
 #[inline]
-fn identity_activation(val: f32) -> f32 {
+fn identity_activation(_: f32) -> f32 {
     panic!("TODO(orglofch): Implement");
 }
 
 #[inline]
-fn clamped_activation(val: f32) -> f32 {
+fn clamped_activation(_: f32) -> f32 {
     panic!("TODO(orglofch): Implement");
 }
 
 #[inline]
-fn inv_activation(val: f32) -> f32 {
+fn inv_activation(_: f32) -> f32 {
     panic!("TODO(orglofch): Implement");
 }
 
 #[inline]
-fn log_activation(val: f32) -> f32 {
+fn log_activation(_: f32) -> f32 {
     panic!("TODO(orglofch): Implement");
 }
 
 #[inline]
-fn exp_activation(val: f32) -> f32 {
+fn exp_activation(_: f32) -> f32 {
     panic!("TODO(orglofch): Implement");
 }
 
 #[inline]
-fn abs_activation(val: f32) -> f32 {
+fn abs_activation(_: f32) -> f32 {
     panic!("TODO(orglofch): Implement");
 }
 
 #[inline]
-fn hat_activation(val: f32) -> f32 {
+fn hat_activation(_: f32) -> f32 {
     panic!("TODO(orglofch): Implement");
 }
 
 #[inline]
 fn square_activation(val: f32) -> f32 {
-    panic!("TODO(orglofch): Implement");
+    val * val
 }
 
 #[inline]
 fn cube_activation(val: f32) -> f32 {
-    panic!("TODO(orglofch): Implement");
+    val * val * val
 }
 
 #[inline]
-fn sinc_activation(val: f32) -> f32 {
+fn sinc_activation(_: f32) -> f32 {
     panic!("TODO(orglofch): Implement");
 }
 
@@ -163,5 +163,23 @@ mod test {
         assert_approx_eq!(function.eval(0.0), 1.0);
         assert_approx_eq!(function.eval(100.0), 0.0);
         assert_approx_eq!(function.eval(-100.0), 0.0);
+    }
+
+    #[test]
+    pub fn test_square_activation() {
+        let function = ActivationFn::Square;
+
+        assert_approx_eq!(function.eval(0.0), 0.0);
+        assert_approx_eq!(function.eval(2.0), 4.0);
+        assert_approx_eq!(function.eval(-2.0), 4.0);
+    }
+
+    #[test]
+    pub fn test_cube_activation() {
+        let function = ActivationFn::Cube;
+
+        assert_approx_eq!(function.eval(0.0), 0.0);
+        assert_approx_eq!(function.eval(2.0), 8.0);
+        assert_approx_eq!(function.eval(-2.0), -8.0);
     }
 }
