@@ -161,8 +161,8 @@ mod test {
         let function = ActivationFn::Sin;
 
         assert_approx_eq!(function.eval(0.0), (0.0_f32).sin());
-        assert_approx_eq!(function.eval(1.0), (1.0_f32).sin());
-        assert_approx_eq!(function.eval(0.5), (0.5_f32).sin());
+        assert_approx_eq!(function.eval(f32::consts::PI), 0.0);
+        assert_approx_eq!(function.eval(-f32::consts::PI), 0.0);
     }
 
     #[test]
@@ -283,7 +283,7 @@ mod test {
 
         assert_approx_eq!(function.eval(0.0), 1.0);
         assert_approx_eq!(function.eval(f32::consts::PI), 0.0);
-        assert_approx_eq!(function.eval(f32::consts::PI), 0.0);
+        assert_approx_eq!(function.eval(-f32::consts::PI), 0.0);
         assert_approx_eq!(function.eval(100000.0), 0.0);
         assert_approx_eq!(function.eval(-100000.0), 0.0);
     }
