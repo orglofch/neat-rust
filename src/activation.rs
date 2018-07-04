@@ -1,3 +1,5 @@
+const EPSILON: f32 = 1e-7;
+
 #[derive(Clone, Copy)]
 pub enum ActivationFn {
     Sigmoid,
@@ -9,7 +11,7 @@ pub enum ActivationFn {
     Identity,
     Clamped,
     Inv,
-    Log,
+    Ln,
     Exp,
     Abs,
     Hat,
@@ -30,7 +32,7 @@ impl ActivationFn {
             ActivationFn::Identity => identity_activation(val),
             ActivationFn::Clamped => clamped_activation(val),
             ActivationFn::Inv => inv_activation(val),
-            ActivationFn::Log => log_activation(val),
+            ActivationFn::Ln => ln_activation(val),
             ActivationFn::Exp => exp_activation(val),
             ActivationFn::Abs => abs_activation(val),
             ActivationFn::Hat => hat_activation(val),
@@ -90,8 +92,8 @@ fn inv_activation(_: f32) -> f32 {
 }
 
 #[inline]
-fn log_activation(_: f32) -> f32 {
-    panic!("TODO(orglofch): Implement");
+fn ln_activation(val: f32) -> f32 {
+    val.max(EPSILON).ln()
 }
 
 #[inline]
@@ -166,12 +168,21 @@ mod test {
     }
 
     #[test]
+    pub fn test_ln_activation() {
+        let function = ActivationFn::Ln;
+
+        assert_approx_eq!(function.eval(0.0), EPSILON.ln());
+        assert_approx_eq!(function.eval(2.0), (2.0_f32).ln());
+        assert_approx_eq!(function.eval(-2.0), EPSILON.ln());
+    }
+
+    #[test]
     pub fn test_exp_activation() {
         let function = ActivationFn::Exp;
 
         assert_approx_eq!(function.eval(0.0), (0.0_f32).exp());
-        assert_approx_eq!(function.eval(1.0), (1.0_f32).exp());
         assert_approx_eq!(function.eval(2.0), (2.0_f32).exp());
+        assert_approx_eq!(function.eval(-2.0), (-2.0_f32).exp());
     }
 
     #[test]
