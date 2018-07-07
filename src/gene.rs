@@ -93,7 +93,7 @@ impl ConnectionGene {
 
     /// Creae a new `ConnectionGene` via crossover between this `ConnectionGene` and another.
     pub(crate) fn crossover(&self, other: &ConnectionGene) -> ConnectionGene {
-        debug_assert_eq!(self.splits, other.splits);
+        debug_assert_eq!(self.splits, other.splits, "Only the same gene should be crossed");
 
         // TODO(orglofch): Better crossover.
         ConnectionGene {

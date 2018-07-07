@@ -116,7 +116,7 @@ impl InnovationArchive {
     pub(crate) fn record_hidden_node_innovation(&mut self, in_id: u32, out_id: u32, split_count: u32) -> u32 {
         match self.hidden_node_ids_by_origin.entry((in_id, out_id)) {
             Entry::Occupied(o) => {
-                let mut value = o.into_mut();
+                let value = o.into_mut();
                 if split_count < value.len() as u32 {
                     return value[split_count as usize];
                 }
@@ -133,6 +133,8 @@ impl InnovationArchive {
                 new_id
             }
             Entry::Vacant(v) => {
+                debug_assert_eq!(split_count, 0, "A new connection should not have any prior splits");
+
                 let mut value = Vec::new();
                 let new_id = self.next_node_innovation_id;
                 self.next_node_innovation_id += 1;
@@ -207,5 +209,25 @@ mod test {
 
         // An entirely new node creates a new innovation.
         assert_eq!(archive.record_hidden_node_innovation(3, 4, 0), 3);
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn test_record_hidden_node_skipped_split() {
+        let mut archive = InnovationArchive::new();
+
+        assert_eq!(archive.record_hidden_node_innovation(1, 2, 0), 0);
+
+        // Same node, but with split 1 skipped.
+        archive.record_hidden_node_innovation(1, 2, 2);
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn test_record_hidden_node_skipped_split_new_connection() {
+        let mut archive = InnovationArchive::new();
+
+        // This connection doesn't exist yet so it has no prior splits.
+        archive.record_hidden_node_innovation(1, 2, 1);
     }
 }

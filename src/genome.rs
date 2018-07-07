@@ -538,12 +538,16 @@ impl<'a> Genome<'a> {
 
     /// Mutate the `Genome` by adding a new `NodeGene` structural mutation.
     fn mutate_add_node<R: Rng>(&mut self, genome_config: &mut GenomeConfig, rng: &mut R) {
-        let maybe_split_edge = self.split_random_connection(rng);
-        if maybe_split_edge.is_none() {
+        let mut splittable_edges: Vec<(u32, u32)> = self.connections_by_edge
+            .iter_mut()
+            .filter(|entry| entry.1.enabled)
+            .map(|entry| *entry.0)
+            .collect();
+        if splittable_edges.is_empty() {
             return;
         }
 
-        let split_edge = maybe_split_edge.unwrap();
+        let split_edge = rng.choose_mut(&mut splittable_edges).unwrap();
 
         // Retrieve the split connection.
         let con = self.connections_by_edge.get(&split_edge).unwrap().clone();
@@ -556,6 +560,17 @@ impl<'a> Genome<'a> {
             new_id,
             NodeGene::new(AggregationFn::Sum, ActivationFn::Sigmoid),
         );
+
+        // Update the previous connection.
+        {
+            let connection = self.connections_by_edge.get_mut(&split_edge).unwrap();
+
+            // Disable the original connection.
+            connection.enabled = false;
+
+            // Increase the number of splits.
+            connection.splits += 1;
+        }
 
         // Create two new connections.
         // The first connection is initialized with a weight of 1.
@@ -587,30 +602,6 @@ impl<'a> Genome<'a> {
         // TODO(orglofch): Make the distribution variable and move the current weight
         // rather than setting a new weight, possibly based on a covariance.
         connection.weight = rng.gen_range::<f32>(0.0, 1.0);
-    }
-
-    /// Splits a random enabled connection and returns the edge it split.
-    fn split_random_connection<R: Rng>(&mut self, rng: &mut R) -> Option<(u32, u32)> {
-        let mut splittable_edges: Vec<(u32, u32)> = self.connections_by_edge
-            .iter_mut()
-            .filter(|entry| entry.1.enabled)
-            .map(|entry| *entry.0)
-            .collect();
-        if splittable_edges.is_empty() {
-            return None;
-        }
-
-        let edge = rng.choose_mut(&mut splittable_edges).unwrap();
-
-        let connection = self.connections_by_edge.get_mut(&edge).unwrap();
-
-        // Disable the original connection.
-        connection.enabled = false;
-
-        // Increase the number of splits.
-        connection.splits += 1;
-
-        return Some(edge.clone());
     }
 
     /// Checks whether the addition of a connection would form a cycle.
