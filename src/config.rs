@@ -1,3 +1,5 @@
+extern crate rand;
+
 use std::collections::HashMap;
 
 use checkpoint::CheckpointConfig;
@@ -19,17 +21,17 @@ impl ConfigError {
     }
 }
 
-pub struct Config {
+pub struct Config<'a> {
     checkpoint_config: Option<CheckpointConfig>,
     fitness_config: FitnessConfig,
-    genome_config: GenomeConfig,
+    genome_config: GenomeConfig<'a>,
     speciation_config: SpeciationConfig,
 
     population_size: u32,
 }
 
-impl Config {
-    pub fn new(fitness_config: FitnessConfig, genome_config: GenomeConfig) -> Config {
+impl<'a> Config<'a> {
+    pub fn new(fitness_config: FitnessConfig, genome_config: GenomeConfig<'a>) -> Config {
         Config {
             checkpoint_config: None,
             fitness_config: fitness_config,
@@ -39,17 +41,17 @@ impl Config {
         }
     }
 
-    pub fn set_checkpoint_config(&mut self, config: CheckpointConfig) -> &mut Config {
+    pub fn set_checkpoint_config(&mut self, config: CheckpointConfig) -> &mut Config<'a> {
         self.checkpoint_config = Some(config);
         self
     }
 
-    pub fn set_speciation_config(&mut self, config: SpeciationConfig) -> &mut Config {
+    pub fn set_speciation_config(&mut self, config: SpeciationConfig) -> &mut Config<'a> {
         self.speciation_config = config;
         self
     }
 
-    pub fn set_population_size(&mut self, size: u32) -> &mut Config {
+    pub fn set_population_size(&mut self, size: u32) -> &mut Config<'a> {
         self.population_size = size;
         self
     }
@@ -63,31 +65,53 @@ impl Config {
             population.insert(i as u32, Genome::new(&mut self.genome_config));
         }
 
+        let mut rng = rand::thread_rng();
+
         for _ in 0..100000 {
             let fitness_by_id = (self.fitness_config.fitness_fn)(&population);
 
-            // TODO(orglofch): We probably want a pool allocator for new genomes and connections.
+            // TODO(orglofch): We probably want a pool allocator for new genomes and connections and
+            // to reuse the existing allocated ganomes.
 
             let species = speciate(&population, &self.speciation_config);
 
-            // Calculate the weighted fitness of the population groups.
-            let mut species_fitness_by_proto_id: HashMap<u32, f32> = HashMap::new();
-            for (proto_id, genome_ids) in species.iter() {
-                let fitness_sum: f32 = genome_ids
-                    .iter()
-                // TODO(orglofch): Possible don't default to 0 or at least provide a warning that we're
-                // doing so.
-                    .map(|id| fitness_by_id.get(&id).unwrap_or(&0.0))
-                    .sum();
-                species_fitness_by_proto_id.insert(*proto_id, fitness_sum / genome_ids.len() as f32);
+            // Calculate the weighted fitness of the population groups to support fitness sharing.
+            let species_fitness_by_proto_id: HashMap<u32, f32> = species
+                .iter()
+                .map(|(proto_id, genome_ids)| {
+                    // TODO(orglofch): Consider not defaulting to 0, probably just assert.
+                    let sum: f32 = genome_ids
+                        .iter()
+                        .map(|id| fitness_by_id.get(&id).unwrap_or(&0.0))
+                        .sum();
+                    (*proto_id, sum / genome_ids.len() as f32)
+                })
+                .collect();
+
+
+            let fitness_sum: f32 = species_fitness_by_proto_id
+                .iter()
+                .map(|(_, fitness)| fitness)
+                .sum();
+
+            // Generate the new population.
+            for (proto_id, species) in species.iter() {
+                // This species generates offspring according to it shared normalized fitness.
+                let new_species_size = population.len() as f32 * species_fitness_by_proto_id.get(&proto_id).unwrap() /
+                    fitness_sum;
+
+                // Perform crossover.
+                //let children: Vec<&Genome> = species.iter()
+                //    .map(|id| population.get_mut(&id))
+                //    .collect();
+
+                // Perform mutations.
+                for id in species {
+                    let genome = population.get_mut(&id).unwrap();
+
+                    genome.mutate(&mut self.genome_config, &mut rng);
+                }
             }
-
-            // Perform intra-species crossover based on fitness.
-
-            // Perform mutation.
-
-            // Update the population pool.
-            // TODO(orglofch): We probably want to try to reuse allocations here to speed it up.
         }
     }
 }

@@ -2,7 +2,7 @@ use activation::ActivationFn;
 use aggregation::AggregationFn;
 use speciation::SpeciationConfig;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NodeGene {
     /// The function used in aggregating across synapses prior to calculating activation.
     pub(crate) aggregation_fn: AggregationFn,
@@ -56,7 +56,7 @@ impl NodeGene {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ConnectionGene {
     /// Whether the connection is enabled.
     ///
@@ -81,14 +81,9 @@ impl ConnectionGene {
     }
 
     /// Calculates the compatibility distance between this `ConnectionGene` and another.
-    pub(crate) fn distance(
-        &self,
-        other: &ConnectionGene,
-        speciation_config: &SpeciationConfig,
-    ) -> f32 {
+    pub(crate) fn distance(&self, other: &ConnectionGene, speciation_config: &SpeciationConfig) -> f32 {
         // TODO(orglofch): Consider concept of disabled state.
-        return (self.weight - other.weight).abs() *
-            speciation_config.compatibility_weight_coefficient;
+        return (self.weight - other.weight).abs() * speciation_config.compatibility_weight_coefficient;
     }
 
     /// Calculates the activation of the `ConnectionGene` given it's input.

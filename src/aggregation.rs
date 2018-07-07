@@ -1,6 +1,6 @@
 use std::f32;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum AggregationFn {
     Sum,
     Product,

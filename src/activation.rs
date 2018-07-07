@@ -2,7 +2,7 @@ use std::f32;
 
 const EPSILON: f32 = 1e-7;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ActivationFn {
     Sigmoid,
     Tanh,
@@ -91,11 +91,7 @@ fn clamped_activation(val: f32) -> f32 {
 #[inline]
 fn inv_activation(val: f32) -> f32 {
     let inv = 1.0 / val;
-    if inv.is_infinite() {
-        0.0
-    } else {
-        inv
-    }
+    if inv.is_infinite() { 0.0 } else { inv }
 }
 
 #[inline]

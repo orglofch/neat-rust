@@ -89,16 +89,16 @@ pub fn speciate(population: &Population, speciation_config: &SpeciationConfig) -
 mod test {
     use super::*;
 
+    const INPUT: &'static str = "input";
+    const OUTPUT: &'static str = "output";
+
     #[test]
     fn test_speciate() {
-        let inputs = vec!["input_1".to_owned()];
-        let outputs = vec!["output_1".to_owned()];
-        let mut gen_conf = GenomeConfig::new(inputs.clone(), outputs.clone());
+        let mut gen_conf = GenomeConfig::new(vec![INPUT], vec![OUTPUT]);
         gen_conf.set_start_connected(false);
 
         let gen_1 = Genome::new(&mut gen_conf);
 
-        gen_conf.set_inputs(inputs);
         gen_conf.set_start_connected(true);
 
         let gen_2 = Genome::new(&mut gen_conf);
@@ -117,7 +117,17 @@ mod test {
         let species = speciate(&population, &speciation_conf);
 
         assert_eq!(species.len(), 2);
-        assert!(species.values().find(|val| **val == vec!(1).into_iter().collect()).is_some());
-        assert!(species.values().find(|val| **val == vec!(2, 3).into_iter().collect()).is_some());
+        assert!(
+            species
+                .values()
+                .find(|val| **val == vec![1].into_iter().collect())
+                .is_some()
+        );
+        assert!(
+            species
+                .values()
+                .find(|val| **val == vec![2, 3].into_iter().collect())
+                .is_some()
+        );
     }
 }
