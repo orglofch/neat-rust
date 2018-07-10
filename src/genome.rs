@@ -990,6 +990,32 @@ mod test {
     }
 
     #[test]
+    fn test_mutate_add_connection_reenable_connection() {
+        let mut gen_conf = GenomeConfig::new(vec![INPUT_1], vec![OUTPUT_1]);
+        gen_conf.set_start_connected(true);
+
+        let mut rng = rand::thread_rng();
+
+        let mut gen = Genome::new(&mut gen_conf);
+
+        let in_id = *gen.input_ids_by_name.get(&INPUT_1).unwrap();
+        let out_id = *gen.output_ids_by_name.get(&OUTPUT_1).unwrap();
+
+        gen.connections_by_edge.get_mut(&(in_id, out_id)).unwrap().enabled = false;
+
+        gen.mutate_add_connection(&mut gen_conf, &mut rng);
+
+        // Connect is re-enabled.
+        assert_eq!(gen.connections_by_edge
+                   .get(&(in_id, out_id))
+                   .unwrap()
+                   .enabled,
+                   true);
+        // No new connections were created.
+        assert_eq!(gen.connections_by_edge.len(), 1);
+    }
+
+    #[test]
     fn test_mutate_remove_connection() {
         let mut gen_conf = GenomeConfig::new(vec![INPUT_1], vec![OUTPUT_1]);
         gen_conf.set_start_connected(true);
