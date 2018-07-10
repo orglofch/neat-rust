@@ -750,8 +750,7 @@ mod test {
 
         let gen = Genome::new(&mut gen_conf);
 
-        let mut inputs: HashMap<&str, f32> = HashMap::new();
-        inputs.insert(INPUT_1, 1.0);
+        let inputs: HashMap<&str, f32> = hashmap! { INPUT_1 => 1.0 };
 
         let results = gen.activate(&inputs);
 
@@ -804,36 +803,40 @@ mod test {
         );
 
         // (1, 1) => 0.
-        let mut inputs: HashMap<&str, f32> = HashMap::new();
-        inputs.insert(INPUT_1, 1.0);
-        inputs.insert(INPUT_2, 1.0);
+        let inputs: HashMap<&str, f32> = hashmap! {
+            INPUT_1 => 1.0,
+            INPUT_2 => 1.0
+        };
 
         let results = gen.activate(&inputs);
 
         assert_approx_eq!(results.get(&OUTPUT_1).unwrap(), 0.0);
 
         // (1, 0) => 1.
-        let mut inputs: HashMap<&str, f32> = HashMap::new();
-        inputs.insert(INPUT_1, 1.0);
-        inputs.insert(INPUT_2, 0.0);
+        let inputs: HashMap<&str, f32> = hashmap! {
+            INPUT_1 => 1.0,
+            INPUT_2 => 0.0
+        };
 
         let results = gen.activate(&inputs);
 
         assert_approx_eq!(results.get(&OUTPUT_1).unwrap(), 1.0);
 
         // (0, 1) => 1.
-        let mut inputs: HashMap<&str, f32> = HashMap::new();
-        inputs.insert(INPUT_1, 0.0);
-        inputs.insert(INPUT_2, 1.0);
+        let inputs: HashMap<&str, f32> = hashmap! {
+            INPUT_1 => 0.0,
+            INPUT_2 => 1.0
+        };
 
         let results = gen.activate(&inputs);
 
         assert_approx_eq!(results.get(&OUTPUT_1).unwrap(), 1.0);
 
         // (0, 0) => 0.
-        let mut inputs: HashMap<&str, f32> = HashMap::new();
-        inputs.insert(INPUT_1, 0.0);
-        inputs.insert(INPUT_2, 0.0);
+        let inputs: HashMap<&str, f32> = hashmap! {
+            INPUT_1 => 0.0,
+            INPUT_2 => 0.0
+        };
 
         let results = gen.activate(&inputs);
 
