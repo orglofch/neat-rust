@@ -67,7 +67,9 @@ impl<'a> Config<'a> {
 
         let mut rng = rand::thread_rng();
 
-        for _ in 0..100000 {
+        for _ in 0..1000 {
+            println!("ITER");
+
             let fitness_by_id = (self.fitness_config.fitness_fn)(&population);
 
             // TODO(orglofch): We probably want a pool allocator for new genomes and connections and

@@ -30,10 +30,7 @@ fn eval_fitness(population: &Population) -> HashMap<u32, f32> {
     return population
         .iter()
         .map(|(id, genome)| {
-            (
-                *id,
-                *genome.activate(&inputs).get(&OUTPUT).unwrap(),
-            )
+            (*id, *genome.activate(&inputs).get(&OUTPUT).unwrap())
         })
         .collect();
 }
@@ -44,5 +41,7 @@ fn main() {
     let genome_config = GenomeConfig::new(vec![INPUT_1, INPUT_2], vec![OUTPUT]);
 
     let mut config = Config::new(fitness_config, genome_config);
+    config.set_population_size(10);
+
     config.run();
 }

@@ -463,7 +463,7 @@ impl<'a> Genome<'a> {
             return;
         }
 
-        // TODO(orglofch): Mutate weight.
+        self.mutate_weight(rng);
     }
 
     /// Mutates the `Genome` by adding a new `ConnectionGene` structural mutation.
@@ -536,6 +536,24 @@ impl<'a> Genome<'a> {
         );
     }
 
+    /// Mutate the `Genome` by removing a `ConnectionGene` structural mutation.
+    fn mutate_remove_connection<R: Rng>(&mut self, rng: &mut R) {
+        let mut active_connections: Vec<&mut ConnectionGene> = self.connections_by_edge
+            .iter_mut()
+            .map(|entry| entry.1)
+            .filter(|con| con.enabled)
+            .collect();
+        if active_connections.is_empty() {
+            return;
+        }
+
+        let con = rng.choose_mut(&mut active_connections).unwrap();
+
+        // We don't actually remove connections since they're important for speciation,
+        // instead we disable the connection.
+        con.enabled = false;
+    }
+
     /// Mutate the `Genome` by adding a new `NodeGene` structural mutation.
     fn mutate_add_node<R: Rng>(&mut self, genome_config: &mut GenomeConfig, rng: &mut R) {
         let mut splittable_edges: Vec<(u32, u32)> = self.connections_by_edge
@@ -586,6 +604,11 @@ impl<'a> Genome<'a> {
         );
     }
 
+    /// Mutate the `Genome` by removing a `NodeGene` structural mutation.
+    fn mutate_remove_node<R: Rng>(&mut self, rng: &mut R) {
+        // TODO(orglofch): Implement.
+    }
+
     /// Mutate the `Genome` by modifying the weight on an existing `NodeGene`.
     fn mutate_weight<R: Rng>(&mut self, rng: &mut R) {
         // Select a random active connection.
@@ -599,14 +622,11 @@ impl<'a> Genome<'a> {
 
         let connection = rng.choose_mut(&mut active_connections).unwrap();
 
-        // TODO(orglofch): Make the distribution variable and move the current weight
-        // rather than setting a new weight, possibly based on a covariance.
-        connection.weight = rng.gen_range::<f32>(0.0, 1.0);
+        // TODO(orglofch): Make the distribution variable, possibly based on a covariance.
+        connection.weight += rng.gen_range::<f32>(-1.0, 1.0);
     }
 
     /// Checks whether the addition of a connection would form a cycle.
-    ///
-    /// TODO(orglofch): Add tests for this.
     fn creates_cycle(&self, in_id: u32, out_id: u32) -> bool {
         // TODO(orglofch): We shouldn't include disabled connections but we need to
         // in the event they become enabled in the future.
@@ -654,6 +674,8 @@ pub type Population<'a> = HashMap<u32, Genome<'a>>;
 #[cfg(test)]
 mod test {
     use super::*;
+
+    use super::rand::rngs::mock::StepRng;
 
     const INPUT_1: &'static str = "input_1";
     const INPUT_2: &'static str = "input_2";
@@ -964,6 +986,83 @@ mod test {
         assert_eq!(gen.output_ids_by_name.len(), 1);
     }
 
+    #[test]
+    fn test_mutate_remove_connection() {
+        let mut gen_conf = GenomeConfig::new(vec![INPUT_1], vec![OUTPUT_1]);
+        gen_conf.set_start_connected(true);
+
+        let mut rng = rand::thread_rng();
+
+        let mut gen = Genome::new(&mut gen_conf);
+
+        let in_id = *gen.input_ids_by_name.get(&INPUT_1).unwrap();
+        let out_id = *gen.output_ids_by_name.get(&OUTPUT_1).unwrap();
+
+        assert_eq!(gen.connections_by_edge
+                   .get(&(in_id, out_id))
+                   .unwrap()
+                   .enabled,
+                   true);
+
+        gen.mutate_remove_connection(&mut rng);
+
+        // Connection is disabled but not removed.
+        assert_eq!(gen.connections_by_edge
+                   .get(&(in_id, out_id))
+                   .unwrap()
+                   .enabled,
+                   false);
+    }
+
+    #[test]
+    fn test_mutate_remove_connection_no_connections() {
+        let mut gen_conf = GenomeConfig::new(vec![INPUT_1], vec![OUTPUT_1]);
+
+        let mut rng = rand::thread_rng();
+
+        let mut gen = Genome::new(&mut gen_conf);
+
+        let in_id = *gen.input_ids_by_name.get(&INPUT_1).unwrap();
+        let out_id = *gen.output_ids_by_name.get(&OUTPUT_1).unwrap();
+
+        assert_eq!(gen.connections_by_edge
+                   .get(&(in_id, out_id))
+                   .is_none(),
+                   true);
+
+        gen.mutate_remove_connection(&mut rng);
+
+        // Still doesn't exist.
+        assert_eq!(gen.connections_by_edge
+                   .get(&(in_id, out_id))
+                   .is_none(),
+                   true);
+    }
+
+    #[test]
+    fn test_mutate_remove_connection_no_active_connections() {
+        let mut gen_conf = GenomeConfig::new(vec![INPUT_1], vec![OUTPUT_1]);
+        gen_conf.set_start_connected(true);
+
+        let mut rng = rand::thread_rng();
+
+        let mut gen = Genome::new(&mut gen_conf);
+
+        let in_id = *gen.input_ids_by_name.get(&INPUT_1).unwrap();
+        let out_id = *gen.output_ids_by_name.get(&OUTPUT_1).unwrap();
+
+        gen.connections_by_edge.get_mut(&(in_id, out_id)).unwrap().enabled = false;
+
+        gen.mutate_remove_connection(&mut rng);
+
+        // Still disabled.
+        assert_eq!(gen.connections_by_edge
+                   .get(&(in_id, out_id))
+                   .unwrap()
+                   .enabled,
+                   false);
+    }
+
     // TODO(orglofch): Test with recurrences enabled.
 
     // TODO(orglofch): fn test_mutate_add_connection_reenable() {}
@@ -1003,16 +1102,46 @@ mod test {
     }
 
     #[test]
+    fn test_mutate_weight() {
+        let mut gen_conf = GenomeConfig::new(vec![INPUT_1], vec![OUTPUT_1]);
+        gen_conf.set_start_connected(true);
+
+        let mut gen = Genome::new(&mut gen_conf);
+
+        // TODO(orglofch): StepRng doesn't affect gen_range.
+        let mut rng = StepRng::new(1, 0);
+
+        let in_id = *gen.input_ids_by_name.get(&INPUT_1).unwrap();
+        let out_id = *gen.output_ids_by_name.get(&OUTPUT_1).unwrap();
+
+        let initial_weight = gen.connections_by_edge
+            .get(&(in_id, out_id))
+            .unwrap()
+            .weight;
+
+        assert_eq!(initial_weight, 1.0);
+
+        gen.mutate_weight(&mut rng);
+
+        let new_weight = gen.connections_by_edge
+            .get(&(in_id, out_id))
+            .unwrap()
+            .weight;
+
+        assert_eq!(new_weight, 0.0);
+    }
+
+    #[test]
     fn test_creates_cycle() {
         let mut gen_conf = GenomeConfig::new(vec![INPUT_1], vec![OUTPUT_1]);
         gen_conf.set_start_connected(true);
 
         let gen = Genome::new(&mut gen_conf);
 
-        let in_id = gen.input_ids_by_name.get(&INPUT_1).unwrap();
-        let out_id = gen.output_ids_by_name.get(&OUTPUT_1).unwrap();
+        let in_id = *gen.input_ids_by_name.get(&INPUT_1).unwrap();
+        let out_id = *gen.output_ids_by_name.get(&OUTPUT_1).unwrap();
 
-        assert_eq!(gen.creates_cycle(*out_id, *in_id), true);
+        assert_eq!(gen.creates_cycle(out_id, in_id), true);
     }
 
     #[test]
