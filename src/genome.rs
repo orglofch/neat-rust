@@ -22,8 +22,6 @@ use speciation::SpeciationConfig;
 pub struct GenomeConfig<'a> {
     innovation_archive: InnovationArchive,
 
-    // TODO(orglofch): Allow inputs and outputs to be named, making the addition or removal
-    // of input or outputs in checkpointing more explicit.
     /// The named inputs of a `Genome`.
     ///
     /// Note, this excludes bias as an input.
@@ -118,11 +116,9 @@ pub struct Genome<'a> {
     input_ids_by_name: HashMap<&'a str, u32>,
 
     /// `NodeGene` ids by their named outputs.
-    /// TODO(orglofch): Consider using &strs.
     output_ids_by_name: HashMap<&'a str, u32>,
 
     /// Output `NodeGenes` by their id.
-    /// TODO(orglofch): Consider using &strs.
     output_nodes_by_id: HashMap<u32, NodeGene>,
 
     /// Hidden `NodeGenes` by their id.
@@ -669,8 +665,6 @@ impl<'a> Genome<'a> {
 pub type Population<'a> = HashMap<u32, Genome<'a>>;
 
 // TODO(orglofch): More comprehensive equality tests.
-// TODO(orglofch): Figure out how to force seed the rng without implementing the whole trait.
-// TODO(orglofch): Adds tests for mutate weights.
 #[cfg(test)]
 mod test {
     use super::*;
@@ -766,44 +760,51 @@ mod test {
 
         gen.output_nodes_by_id.values_mut().next().unwrap().bias = -300.0;
 
+        let hidden_id_1 = 9;
+        let hidden_id_2 = 10;
+
         let hidden_1 = NodeGene::new(AggregationFn::Sum, ActivationFn::Sigmoid);
-        gen.hidden_nodes_by_id.insert(3, hidden_1);
-        gen.hidden_nodes_by_id.get_mut(&3).unwrap().bias = -100.0;
+        gen.hidden_nodes_by_id.insert(hidden_id_1, hidden_1);
+        gen.hidden_nodes_by_id.get_mut(&hidden_id_1).unwrap().bias = -100.0;
 
         let hidden_2 = NodeGene::new(AggregationFn::Sum, ActivationFn::Sigmoid);
-        gen.hidden_nodes_by_id.insert(4, hidden_2);
-        gen.hidden_nodes_by_id.get_mut(&4).unwrap().bias = 300.0;
+        gen.hidden_nodes_by_id.insert(hidden_id_2, hidden_2);
+        gen.hidden_nodes_by_id.get_mut(&hidden_id_2).unwrap().bias = 300.0;
 
-        // TODO(orglofch): This assume input vs output order.
+        let in_id_1 = *gen.input_ids_by_name.get(&INPUT_1).unwrap();
+        let in_id_2 = *gen.input_ids_by_name.get(&INPUT_2).unwrap();
+        let out_id = *gen.output_ids_by_name.get(&OUTPUT_1).unwrap();
+
         gen.connections_by_edge.insert(
-            (0, 3),
+            (in_id_1, hidden_id_1),
             ConnectionGene::new(200.0),
         );
         gen.connections_by_edge.insert(
-            (1, 3),
+            (in_id_2, hidden_id_1),
             ConnectionGene::new(200.0),
         );
 
         gen.connections_by_edge.insert(
-            (0, 4),
+            (in_id_1, hidden_id_2),
             ConnectionGene::new(-200.0),
         );
         gen.connections_by_edge.insert(
-            (1, 4),
+            (in_id_2, hidden_id_2),
             ConnectionGene::new(-200.0),
         );
 
         gen.connections_by_edge.insert(
-            (3, 2),
+            (hidden_id_1, out_id),
             ConnectionGene::new(200.0),
         );
         gen.connections_by_edge.insert(
-            (4, 2),
+            (hidden_id_2, out_id),
             ConnectionGene::new(200.0),
         );
 
         // (1, 1) => 0.
-        let inputs: HashMap<&str, f32> = hashmap! {
+        let inputs: HashMap<&str, f32> =
+            hashmap! {
             INPUT_1 => 1.0,
             INPUT_2 => 1.0
         };
@@ -813,7 +814,8 @@ mod test {
         assert_approx_eq!(results.get(&OUTPUT_1).unwrap(), 0.0);
 
         // (1, 0) => 1.
-        let inputs: HashMap<&str, f32> = hashmap! {
+        let inputs: HashMap<&str, f32> =
+            hashmap! {
             INPUT_1 => 1.0,
             INPUT_2 => 0.0
         };
@@ -823,7 +825,8 @@ mod test {
         assert_approx_eq!(results.get(&OUTPUT_1).unwrap(), 1.0);
 
         // (0, 1) => 1.
-        let inputs: HashMap<&str, f32> = hashmap! {
+        let inputs: HashMap<&str, f32> =
+            hashmap! {
             INPUT_1 => 0.0,
             INPUT_2 => 1.0
         };
@@ -833,7 +836,8 @@ mod test {
         assert_approx_eq!(results.get(&OUTPUT_1).unwrap(), 1.0);
 
         // (0, 0) => 0.
-        let inputs: HashMap<&str, f32> = hashmap! {
+        let inputs: HashMap<&str, f32> =
+            hashmap! {
             INPUT_1 => 0.0,
             INPUT_2 => 0.0
         };
@@ -1001,16 +1005,21 @@ mod test {
         let in_id = *gen.input_ids_by_name.get(&INPUT_1).unwrap();
         let out_id = *gen.output_ids_by_name.get(&OUTPUT_1).unwrap();
 
-        gen.connections_by_edge.get_mut(&(in_id, out_id)).unwrap().enabled = false;
+        gen.connections_by_edge
+            .get_mut(&(in_id, out_id))
+            .unwrap()
+            .enabled = false;
 
         gen.mutate_add_connection(&mut gen_conf, &mut rng);
 
         // Connect is re-enabled.
-        assert_eq!(gen.connections_by_edge
-                   .get(&(in_id, out_id))
-                   .unwrap()
-                   .enabled,
-                   true);
+        assert_eq!(
+            gen.connections_by_edge
+                .get(&(in_id, out_id))
+                .unwrap()
+                .enabled,
+            true
+        );
         // No new connections were created.
         assert_eq!(gen.connections_by_edge.len(), 1);
     }
@@ -1027,20 +1036,24 @@ mod test {
         let in_id = *gen.input_ids_by_name.get(&INPUT_1).unwrap();
         let out_id = *gen.output_ids_by_name.get(&OUTPUT_1).unwrap();
 
-        assert_eq!(gen.connections_by_edge
-                   .get(&(in_id, out_id))
-                   .unwrap()
-                   .enabled,
-                   true);
+        assert_eq!(
+            gen.connections_by_edge
+                .get(&(in_id, out_id))
+                .unwrap()
+                .enabled,
+            true
+        );
 
         gen.mutate_remove_connection(&mut rng);
 
         // Connection is disabled but not removed.
-        assert_eq!(gen.connections_by_edge
-                   .get(&(in_id, out_id))
-                   .unwrap()
-                   .enabled,
-                   false);
+        assert_eq!(
+            gen.connections_by_edge
+                .get(&(in_id, out_id))
+                .unwrap()
+                .enabled,
+            false
+        );
     }
 
     #[test]
@@ -1054,18 +1067,18 @@ mod test {
         let in_id = *gen.input_ids_by_name.get(&INPUT_1).unwrap();
         let out_id = *gen.output_ids_by_name.get(&OUTPUT_1).unwrap();
 
-        assert_eq!(gen.connections_by_edge
-                   .get(&(in_id, out_id))
-                   .is_none(),
-                   true);
+        assert_eq!(
+            gen.connections_by_edge.get(&(in_id, out_id)).is_none(),
+            true
+        );
 
         gen.mutate_remove_connection(&mut rng);
 
         // Still doesn't exist.
-        assert_eq!(gen.connections_by_edge
-                   .get(&(in_id, out_id))
-                   .is_none(),
-                   true);
+        assert_eq!(
+            gen.connections_by_edge.get(&(in_id, out_id)).is_none(),
+            true
+        );
     }
 
     #[test]
@@ -1080,21 +1093,24 @@ mod test {
         let in_id = *gen.input_ids_by_name.get(&INPUT_1).unwrap();
         let out_id = *gen.output_ids_by_name.get(&OUTPUT_1).unwrap();
 
-        gen.connections_by_edge.get_mut(&(in_id, out_id)).unwrap().enabled = false;
+        gen.connections_by_edge
+            .get_mut(&(in_id, out_id))
+            .unwrap()
+            .enabled = false;
 
         gen.mutate_remove_connection(&mut rng);
 
         // Still disabled.
-        assert_eq!(gen.connections_by_edge
-                   .get(&(in_id, out_id))
-                   .unwrap()
-                   .enabled,
-                   false);
+        assert_eq!(
+            gen.connections_by_edge
+                .get(&(in_id, out_id))
+                .unwrap()
+                .enabled,
+            false
+        );
     }
 
     // TODO(orglofch): Test with recurrences enabled.
-
-    // TODO(orglofch): fn test_mutate_add_connection_reenable() {}
 
     #[test]
     fn test_mutate_add_node() {
